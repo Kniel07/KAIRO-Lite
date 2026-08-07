@@ -1,6 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import type { User } from "@/generated/prisma/client";
-import { prisma } from "@/lib/db/client";
+import { prisma, type Db } from "@/lib/db/client";
 import { includingArchived, onlyArchived, toPagination } from "@/lib/db/soft-delete";
 import type { FindManyParams, PagedResult, Repository } from "@/features/shared/types/Repository";
 
@@ -14,45 +14,52 @@ import type { FindManyParams, PagedResult, Repository } from "@/features/shared/
 // (Phase 2 hardening review) — this also means an archived User cannot be
 // resolved by the Auth.js adapter's own internal lookups, since the
 // adapter shares this same extended `prisma` client instance.
+//
+// Constructor-injected `client` (Phase 3, transaction boundaries, Document
+// 13 §20) — defaults to the global client, but a Service can pass a `tx`
+// (from `withTransaction()`) so this repository participates in a shared
+// transaction instead of opening its own.
 export class UserRepository implements Repository<
   User,
   Prisma.UserCreateInput,
   Prisma.UserUpdateInput
 > {
+  constructor(private readonly client: Db = prisma) {}
+
   async findById(id: string): Promise<User | null> {
-    return prisma.user.findFirst({ where: { id } });
+    return this.client.user.findFirst({ where: { id } });
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return prisma.user.findFirst({ where: { email } });
+    return this.client.user.findFirst({ where: { email } });
   }
 
   async findMany(params?: FindManyParams): Promise<PagedResult<User>> {
     const [items, total] = await Promise.all([
-      prisma.user.findMany({ ...toPagination(params) }),
-      prisma.user.count(),
+      this.client.user.findMany({ ...toPagination(params) }),
+      this.client.user.count(),
     ]);
     return { items, total };
   }
 
   async create(input: Prisma.UserCreateInput): Promise<User> {
-    return prisma.user.create({ data: input });
+    return this.client.user.create({ data: input });
   }
 
   async update(id: string, input: Prisma.UserUpdateInput): Promise<User> {
-    return prisma.user.update({ where: { id }, data: input });
+    return this.client.user.update({ where: { id }, data: input });
   }
 
   async archive(id: string): Promise<void> {
-    await prisma.user.update({ where: { id }, data: { archivedAt: new Date() } });
+    await this.client.user.update({ where: { id }, data: { archivedAt: new Date() } });
   }
 
   /** Escape hatch — archived rows only. */
   async findArchived(params?: FindManyParams): Promise<PagedResult<User>> {
     const where = onlyArchived();
     const [items, total] = await Promise.all([
-      prisma.user.findMany({ where, ...toPagination(params) }),
-      prisma.user.count({ where }),
+      this.client.user.findMany({ where, ...toPagination(params) }),
+      this.client.user.count({ where }),
     ]);
     return { items, total };
   }
@@ -61,14 +68,14 @@ export class UserRepository implements Repository<
   async findIncludingArchived(params?: FindManyParams): Promise<PagedResult<User>> {
     const where = includingArchived();
     const [items, total] = await Promise.all([
-      prisma.user.findMany({ where, ...toPagination(params) }),
-      prisma.user.count({ where }),
+      this.client.user.findMany({ where, ...toPagination(params) }),
+      this.client.user.count({ where }),
     ]);
     return { items, total };
   }
 
   /** Escape hatch — reverses `archive()`. Mutations bypass the extension. */
   async restore(id: string): Promise<void> {
-    await prisma.user.update({ where: { id }, data: { archivedAt: null } });
+    await this.client.user.update({ where: { id }, data: { archivedAt: null } });
   }
 }

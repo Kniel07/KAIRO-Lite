@@ -174,14 +174,14 @@ Modules
 - NotesService
 - DocumentService
 - SearchService
-- GovernanceService
+- GovernanceService — the sole writer of `GovernanceRule`; `KnowledgeService`/`NotesService` read the `"knowledge.allowedCategories"` rule directly via `GovernanceRuleRepositoryLike`, not by calling this Service (Document 13 §20, Amendment 18) <!-- Amended -->
 
 Deliverables
 
 - CRUD
 - Validation
 - Authorization
-- Audit integration
+- Audit integration — every multi-write Service operation executes inside a single Prisma transaction (Document 7 §8, Document 13 §20 Amendment 18), not as independent writes <!-- Amended -->
 
 Exit Criteria
 

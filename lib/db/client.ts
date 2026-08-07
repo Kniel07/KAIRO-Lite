@@ -32,3 +32,11 @@ export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 if (env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
+
+// Document 13 §20 (Phase 3, transaction boundaries) — the type every
+// repository is constructed with: either the global extended client, or an
+// interactive-transaction client handed to it by `withTransaction()`
+// (`lib/db/transaction.ts`). Verified live that `.$extends(softDeleteExtension)`
+// propagates into `$transaction` callbacks — a repository given a `Db` inside
+// a transaction still gets soft-delete filtering automatically.
+export type Db = typeof prisma;

@@ -1,6 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import type { Message } from "@/generated/prisma/client";
-import { prisma } from "@/lib/db/client";
+import { prisma, type Db } from "@/lib/db/client";
 import { toPagination } from "@/lib/db/soft-delete";
 import type { FindManyParams, PagedResult } from "@/features/shared/types/Repository";
 
@@ -9,9 +9,15 @@ import type { FindManyParams, PagedResult } from "@/features/shared/types/Reposi
 // generic `Repository<T, C, U>` shape (Document 10 §4 lists this as an
 // explicitly-justified exception, not an oversight) — there is no
 // update/archive operation to expose.
+//
+// Constructor-injected `client` (Phase 3, transaction boundaries) — see
+// `UserRepository` for the pattern this follows. Not used by any Phase 3
+// Service (AI Workspace is Phase 5) — refactored now for consistency.
 export class MessageRepository {
+  constructor(private readonly client: Db = prisma) {}
+
   async findById(id: string): Promise<Message | null> {
-    return prisma.message.findUnique({ where: { id } });
+    return this.client.message.findUnique({ where: { id } });
   }
 
   async findByConversation(
@@ -20,17 +26,17 @@ export class MessageRepository {
   ): Promise<PagedResult<Message>> {
     const where = { conversationId };
     const [items, total] = await Promise.all([
-      prisma.message.findMany({
+      this.client.message.findMany({
         where,
         orderBy: { createdAt: "asc" },
         ...toPagination(params),
       }),
-      prisma.message.count({ where }),
+      this.client.message.count({ where }),
     ]);
     return { items, total };
   }
 
   async create(input: Prisma.MessageCreateInput): Promise<Message> {
-    return prisma.message.create({ data: input });
+    return this.client.message.create({ data: input });
   }
 }

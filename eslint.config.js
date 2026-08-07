@@ -68,6 +68,34 @@ module.exports = [
       ],
     },
   },
+  // Document 7 §8 (Phase 3, Document 13 §20) — "Services never access
+  // Prisma directly... use a Repository." Narrower than the
+  // components/app rule above: Services legitimately need
+  // `@/lib/db/transaction` (withTransaction) and `@/lib/db/repositories/**`
+  // (constructing repositories), so only the raw client and the generated
+  // Prisma types/client are blocked, not all of `lib/db`.
+  {
+    files: ["features/*/services/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/generated/prisma", "@/generated/prisma/**", "@/lib/db/client"],
+              message:
+                "Services never access Prisma directly (Document 7 §8). Use a Repository, injected via its constructor.",
+            },
+            {
+              group: ["@/ai/providers", "@/ai/providers/**"],
+              message:
+                "Services never call an AI provider directly (Document 4 §3). Go through the AI Orchestrator.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Document 7 §13 (Infrastructure Hardening Sprint, Document 13 §16-19) —
   // "Never access process.env directly throughout the application.
   // Centralize environment loading." `config/env.ts` is the one sanctioned

@@ -7,6 +7,7 @@ export type ErrorCode =
   | "PROJECT_NOT_FOUND"
   | "KNOWLEDGE_NOT_FOUND"
   | "DOCUMENT_NOT_FOUND"
+  | "NOTE_NOT_FOUND"
   | "UNAUTHORIZED"
   | "FORBIDDEN"
   | "AI_PROVIDER_ERROR"
@@ -48,8 +49,9 @@ export class ForbiddenError extends AppError {
 
 // Document 6 §7 — function/entity naming; Document 8 §18 lists
 // PROJECT_NOT_FOUND / KNOWLEDGE_NOT_FOUND / DOCUMENT_NOT_FOUND explicitly.
-// Additional entities extend this union as Phase 2+ introduces them.
-export type NotFoundEntity = "PROJECT" | "KNOWLEDGE" | "DOCUMENT";
+// NOTE was added in Phase 3 for NotesService. Additional entities extend
+// this union as later phases introduce them.
+export type NotFoundEntity = "PROJECT" | "KNOWLEDGE" | "DOCUMENT" | "NOTE";
 
 export class NotFoundError extends AppError {
   constructor(entity: NotFoundEntity, message?: string) {

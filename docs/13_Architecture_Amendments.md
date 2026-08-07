@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Architecture Amendments
 
-Version: 1.3 (applied)
+Version: 1.4 (applied)
 Status: Applied — approved by the project owner. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been updated in place to reflect every amendment below.
 
 ---
@@ -264,7 +264,25 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 
 ---
 
-# 20. Amendment Ledger Summary
+# 20. Amendment 18 — Phase 3 Backend Services Architecture
+
+**Problem:** Document 9's Phase 3 authorization added a requirement not previously written anywhere in the constitution: multi-write Service operations (e.g. an entity write plus its `AuditLog` row) must execute atomically inside a single Prisma transaction, and Repository interfaces must support participating in a shared transaction context rather than each opening independent ones (Document 7 §8 said Services "use Repository interfaces only" and "generate audit records... as part of the business transaction," but never specified the mechanism). Separately, two real cross-feature dependencies surfaced during implementation that Document 7 §7's "never call another Service unless explicitly required" rule doesn't by itself resolve: `KnowledgeService`'s `category` field is governed by the `GovernanceRule` config table (Document 13 §4 Amendment 4), and `NotesService`'s "Convert to Knowledge"/"Convert to Document" operations (Document 8 §11) produce `Knowledge`/`Document` rows.
+
+**Chosen Solution:**
+- **Transaction boundaries:** `lib/db/client.ts` exports `Db = typeof prisma`; `lib/db/transaction.ts` exports `withTransaction<T>(fn: (tx: Db) => Promise<T>)`, wrapping `prisma.$transaction`. Every Repository constructor now accepts `client: Db = prisma` (defaulting to the global client) instead of importing `prisma` at module scope. A Service's write method opens one `withTransaction` and constructs fresh, tx-scoped Repository instances *inside* the callback (e.g. `new ProjectRepository(tx)`), so the entity write and its audit write share one transaction. Read methods (`get`/`list`) use the constructor-injected default-client Repository instances instead — no transaction needed for a single read. Verified live: forcing the second write (the audit write) in a `ProjectService.create()`-shaped transaction to fail with a real Postgres FK violation left zero trace of the entity write afterward, proving genuine rollback, not just code that looks transactional.
+- **Governance category policy:** `KnowledgeService` and `NotesService` both read the `GovernanceRule` row keyed `"knowledge.allowedCategories"` (a value convention introduced here — a JSON array of allowed strings; an absent rule or empty/malformed value means no restriction is configured) directly via `GovernanceRuleRepositoryLike`, not by calling `GovernanceService`. `GovernanceService` remains the sole *writer* of `GovernanceRule` (Document 13 §4's own wording), consistent with Document 7 §8 permitting a Service to depend on any Repository interface, not only its own feature's. This also resolves a build-order dependency the Phase 3 authorization's own service list would otherwise create (`GovernanceService` is specified after `KnowledgeService`).
+- **Note conversion:** `NotesService.convertToKnowledge`/`convertToDocument` write directly via `KnowledgeRepositoryLike`/`DocumentRepositoryLike` (constructed tx-scoped, same as every other write) rather than calling `KnowledgeService`/`DocumentService`. Document 8 §11 requires the *capability*, not a specific call path, and this avoids both an unnecessary Service-to-Service edge and the same build-order issue (`DocumentService` is specified after `NotesService`). The cost, accepted deliberately: the category-governance check and the project-ownership check are duplicated at the point of conversion rather than inherited from a call into `KnowledgeService`/`DocumentService`.
+- **Shared authorization helper:** `features/shared/services/assertProjectOwnership.ts` — `KnowledgeService`, `NotesService`, and `DocumentService` all need the identical "does this `Project` belong to the caller" check (Document 10 §5.3-5.5, all three reference `Project` optionally or required), checked via `findByIdIncludingArchived` rather than `findById` so archiving a Project (a visibility/lifecycle state) doesn't strip access to records already attached to it.
+- **`ProjectRepository.findBySlugIncludingArchived`:** added alongside the existing `findBySlug`. `Project.slug` (Document 10 §5.2) is unique at the database level across archived and active rows alike, so `ProjectService`'s slug-collision check needed to look past the soft-delete extension's default exclusion to stay correct.
+- **`NotFoundEntity` extended:** `lib/utils/errors.ts`'s union gained `"NOTE"` (previously `"PROJECT" | "KNOWLEDGE" | "DOCUMENT"`), needed once `NotesService` existed.
+
+**Consistency Rationale:** None of this changes a public Service method's external behavior or any constitutional rule already applied — it fills in mechanism where Document 7/9/13 established the requirement but not the "how," using the same "Repository-only, no invented Service-to-Service edges" discipline the constitution already establishes elsewhere (Document 5 §20 / Amendment 3's AI Orchestrator dependency-direction rule is the same shape of decision).
+
+**Applied text change:** Document 7 §8 — add one sentence: Repository constructors accept an optional transaction-scoped client, and a Service performing more than one write opens exactly one `withTransaction` around all of them. Document 9, Phase 3 — Modules list annotated: `GovernanceService`'s `GovernanceRule` writes are read directly by `KnowledgeService`/`NotesService` via Repository, not via a Service call.
+
+---
+
+# 21. Amendment Ledger Summary
 
 | # | Topic | Affected Document(s) | Status |
 |---|---|---|---|
@@ -286,8 +304,9 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 | 15 | Markdown sanitization implemented | Doc 7 §21 (enforcement only, no text change) | Applied |
 | 16 | Environment validation failure-path tests | Doc 7 §11-13 (verification only, no text change) | Applied |
 | 17 | CI/CD pipeline | Doc 9 (Phase 0 deliverable annotated) | Applied |
+| 18 | Phase 3 backend services architecture (transaction boundaries, governance read path, note conversion) | Doc 7 §8, Doc 9 Phase 3 | Applied |
 
-All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint (Document 14's Architecture Compliance Matrix directly drove Amendments 14–17), not the original Phase 0 ingestion report — recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
+All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint (Document 14's Architecture Compliance Matrix directly drove Amendments 14–17); Amendment 18 originated from the Phase 3 implementation itself. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
 
 ---
 

@@ -168,6 +168,8 @@ No shortcuts.
 
 **Raw SQL and soft delete** (Document 13 §14, Amendment 12): the Prisma Client Extension that enforces soft-delete (Document 10 §4) only intercepts Prisma Client's model methods — it does not intercept `$queryRaw`/`$executeRaw`. Every raw SQL query must explicitly document its soft-delete behavior. Every repository using `$queryRaw` must either include an `archivedAt` filter itself or explain in a comment why it intentionally doesn't. This is not optional context — a raw query with neither is a defect, not a style issue.
 
+**Transaction boundaries** (Document 13 §20, Amendment 18): every Repository constructor accepts an optional transaction-scoped Prisma client (defaulting to the global client), so it can participate in a caller's transaction instead of always opening its own. When a Service performs more than one write as part of a single business operation — most commonly an entity write plus its `AuditLog` row — it opens exactly one transaction around all of them and constructs fresh, transaction-scoped Repository instances inside it, rather than each write committing independently.
+
 ---
 
 # 9. AI Rules
