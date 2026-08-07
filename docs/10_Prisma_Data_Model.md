@@ -75,7 +75,9 @@ Entities without `archivedAt` (explicitly justified, not oversights):
 
 **Enum `UserRole`** (Filled Gap): `OWNER`, `MEMBER`. MVP creates only `OWNER` rows (see Doc 11). `MEMBER` exists purely so the future multi-user phase (Doc 9 Phase 9) needs no migration.
 
-**Relations:** `projects[]`, `notes[]` (as author), `documents[]`, `tasks[]` (as assignee), `conversations[]`, `settings` (1:1), `auditLogs[]` (as actor), `accounts[]`, `sessions[]`.
+**Relations:** `projects[]`, `notes[]` (as author), `tasksAssigned[]` (as assignee), `conversations[]`, `settings` (1:1), `auditLogs[]` (as actor), `accounts[]`, `sessions[]`.
+
+**Correction (Phase 2 implementation review):** an earlier revision of this row listed `documents[]` as a direct User relation. No such relation exists — §5.5's Document field list (and Document 3 §5's relationship diagram, which nests Documents under Projects, not directly under User) has no `User` foreign key on `Document`. Ownership of a Document flows through its Project. This was a drafting error in this document, not in Document 3; the Prisma schema was implemented per the correct (Document 3-consistent) shape from the start.
 
 ---
 
@@ -164,7 +166,7 @@ Entities without `archivedAt` (explicitly justified, not oversights):
 
 ## 5.6 Task
 
-> Included in schema per Doc 13 §5 amendment (Task is a Core Entity in Doc 3, not a Future Table) but **out of scope for any Service/API/UI** until explicitly greenlit.
+> **RESERVED — schema only.** Included in schema per Doc 13 §5 amendment (Task is a Core Entity in Doc 3, not a Future Table) but **out of scope for any Repository, Service, API route, or UI** until explicitly greenlit (extended from "Service/API/UI" to also exclude Repository during the Phase 2 review — no `TaskRepository` exists, and `Task`/`TaskStatus`/`TaskPriority` are not re-exported from `@/types/database` or `constants/statuses.ts`).
 
 | Field | Type | Constraints | Source |
 |---|---|---|---|

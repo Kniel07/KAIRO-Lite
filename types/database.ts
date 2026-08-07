@@ -3,6 +3,11 @@
 // of reaching into `@/generated/prisma` directly.
 //
 // Document 10 §5 — full domain model (Phase 2 — Database).
+//
+// `Task`/`TaskStatus`/`TaskPriority` are deliberately NOT re-exported here.
+// Task is RESERVED — schema only (Document 10 §5.6, Document 13 §6). No
+// repository, Service, API, or UI may reference it; that includes this
+// types barrel.
 
 export type {
   User,
@@ -21,9 +26,6 @@ export type {
   KnowledgeStatus,
   Document as KairoDocument,
   DocumentType,
-  Task,
-  TaskStatus,
-  TaskPriority,
   Tag,
   Conversation,
   Message,

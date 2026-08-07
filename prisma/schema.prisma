@@ -259,8 +259,11 @@ enum DocumentType {
   OTHER
 }
 
-/// Document 10 §5.6 — schema placeholder only (Document 13 §6, Amendment 5).
-/// Not exposed by any Service, API route, or UI until explicitly greenlit.
+/// RESERVED — schema only (Document 10 §5.6, Document 13 §6, Amendment 5).
+/// No Repository, Service, API route, or UI may reference this model until
+/// it is explicitly greenlit. (As of the Phase 2 review: no TaskRepository
+/// exists, and Task/TaskStatus/TaskPriority are not re-exported from
+/// `@/types/database` or `constants/statuses.ts`.)
 model Task {
   id         String       @id @default(uuid(7))
   title      String

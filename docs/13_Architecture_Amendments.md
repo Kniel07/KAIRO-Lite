@@ -75,11 +75,11 @@ No new API surface is introduced for MVP; `GovernanceRule` is managed through th
 
 **Problem:** Document 3 places `Task` under Core Entities (not Future Tables) with a full field/relationship spec, yet its own purpose line reads "Future implementation item," and no module in Documents 1, 2, 5, or 8 ever surfaces a Task UI, API, or feature folder.
 
-**Chosen Solution:** `Task` **is** included in the Phase 2 Prisma schema and migration (Document 10 §5.6), consistent with its Core Entity placement, but remains explicitly **out of scope for any Service, API route, or UI** in Phases 3–8. It exists as a forward-compatible schema placeholder only, consistent with Document 3's own "Future implementation item" label.
+**Chosen Solution:** `Task` **is** included in the Phase 2 Prisma schema and migration (Document 10 §5.6), consistent with its Core Entity placement, but is **RESERVED — schema only**: out of scope for any Repository, Service, API route, or UI in Phases 3–8. It exists as a forward-compatible schema placeholder only, consistent with Document 3's own "Future implementation item" label.
 
 **Consistency Rationale:** This doesn't resolve the tension by picking one document over the other — it honors both simultaneously: Document 3's *schema* placement (Core Entity) and Document 3's own *scope* label (future) are both true at once, once "in the schema" and "in the product" are recognized as separate questions. No document is contradicted or overridden.
 
-**Applied text change:** None required — this is a sequencing clarification, not a text conflict. Document 9 Phase 2 deliverables may optionally note "includes Task table, unused until a future phase" for clarity.
+**Applied text change:** None required initially — a sequencing clarification, not a text conflict. **Updated during the Phase 2 review:** the original wording ("out of scope for any Service, API route, or UI") did not exclude Repository, and a `TaskRepository` was built during Phase 2 alongside the other 7 generic-shape repositories. On review, that repository was removed — a Repository exposes CRUD capability even with zero current callers, which is a foothold for accidental feature creep the RESERVED status is meant to prevent. Document 10 §5.6 and the Prisma schema's `Task` model comment are both updated accordingly.
 
 ---
 
