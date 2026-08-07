@@ -68,4 +68,29 @@ module.exports = [
       ],
     },
   },
+  // Document 7 §13 (Infrastructure Hardening Sprint, Document 13 §16-19) —
+  // "Never access process.env directly throughout the application.
+  // Centralize environment loading." `config/env.ts` is the one sanctioned
+  // reader; `prisma.config.ts` is a Prisma-CLI-loaded file that runs before
+  // the app's own module graph exists, so it is exempt for the same reason
+  // it already imports `dotenv/config` itself.
+  {
+    files: ["**/*.{ts,tsx}"],
+    // `tests/unit/env.test.ts` is exempt too — it specifically tests
+    // `config/env.ts`'s validation behavior and must mutate `process.env`
+    // directly to set up each fixture. A narrow, documented exception, not
+    // a hole: it's the one file whose entire job is exercising this rule's
+    // subject.
+    ignores: ["config/env.ts", "prisma.config.ts", "tests/unit/env.test.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "MemberExpression[object.name='process'][property.name='env']",
+          message:
+            "Do not access process.env directly (Document 7 §13). Import `env` from @/config/env instead.",
+        },
+      ],
+    },
+  },
 ];

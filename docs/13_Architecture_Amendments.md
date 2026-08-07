@@ -1,8 +1,8 @@
 # KAIRO-Lite
 ## Architecture Amendments
 
-Version: 1.2 (applied)
-Status: Applied — approved by the project owner. Documents 1, 3, 4, 5, 6, 7, 8, 10, and 11 have been updated in place to reflect every amendment below.
+Version: 1.3 (applied)
+Status: Applied — approved by the project owner. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been updated in place to reflect every amendment below.
 
 ---
 
@@ -216,7 +216,55 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 
 ---
 
-# 16. Amendment Ledger Summary
+# 16. Amendment 14 — `process.env` Centralization Enforcement
+
+**Problem:** Document 7 §13 has always required environment access to go through `config/env.ts` — but nothing checked it. The Phase 2 Architecture Compliance Matrix (Document 14) flagged this as a `CONVENTION`-only rule, meaning a real gap: any new file could write `process.env.SOMETHING` directly and nothing would catch it.
+
+**Chosen Solution:** An ESLint `no-restricted-syntax` rule matching the `process.env` AST node itself (catching every access form — `process.env.X`, `process.env["X"]`, bare `process.env`), scoped to all TypeScript files except `config/env.ts` (the one sanctioned reader), `prisma.config.ts` (a Prisma-CLI-loaded file that runs before the app's module graph exists, already exempt for the same reason it needs its own `dotenv/config` import), and `tests/unit/env.test.ts` (which specifically tests `config/env.ts`'s validation behavior and must mutate `process.env` directly to build fixtures). One incidental fix alongside it: `lib/db/client.ts` was itself using `process.env.NODE_ENV` directly for its dev/hot-reload caching check — switched to `env.NODE_ENV` from the centralized loader, closing the one real violation that existed before the rule could be added cleanly.
+
+**Consistency Rationale:** Identical shape to the Component→Prisma and `ai/`→`features/` boundaries already enforced this way (Document 5 §20) — a documented rule gets an ESLint rule once a concrete violation shape exists to write a selector against. Verified live: a deliberate `process.env.OPENAI_API_KEY` access in a throwaway file was confirmed to fail lint before being removed.
+
+**Applied text change:** None to the rule text itself (Document 7 §13 was already correct) — this closes the enforcement gap Document 14 identified, recorded here for traceability.
+
+---
+
+# 17. Amendment 15 — Markdown Sanitization Implemented
+
+**Problem:** Document 7 §21 requires markdown sanitization as a mandatory security control. `lib/markdown/` held only a `.gitkeep` — this was not a convention gap, it was an outright missing requirement, flagged explicitly by Document 14.
+
+**Chosen Solution:** `lib/markdown/sanitize.ts` (`safeHtml()` for raw HTML strings, `sanitizeMarkdown()` for stripping embedded HTML from markdown source text — defense in depth, write-time) and `lib/markdown/render.ts` (`renderMarkdown()` — a `remark`/`rehype` pipeline with `rehype-sanitize` producing safe HTML, defense in depth, read-time). Both are pure `lib/` functions, not components — no UI was built (Document 5 §5: components render, they don't own sanitization logic; a future `MarkdownViewer` component, Phase 4, would call `renderMarkdown()` and is out of scope here). Proven against real XSS payloads (`<script>`, `onerror`, `javascript:` URLs) in `tests/unit/markdown.test.ts`, not just compiled.
+
+**Consistency Rationale:** Two independent sanitization layers (source-text stripping and rendered-HTML sanitization) rather than relying on either alone — consistent with Document 7 §21's blanket "never trust client input" posture applied twice rather than once.
+
+**Applied text change:** None to Document 7 §21's rule text (it was already correct) — this closes the implementation gap Document 14 identified.
+
+---
+
+# 18. Amendment 16 — Environment Validation Failure-Path Tests
+
+**Problem:** Document 14 noted `config/env.ts`'s failure behavior was "implemented, not exercised" — the success path had been run many times (every `npm run build`/`npm run dev`), but no test proved a missing or malformed variable actually failed the way Document 7 §11-13 expects.
+
+**Chosen Solution:** `tests/unit/env.test.ts` — dynamically re-imports `config/env.ts` (via `vi.resetModules()`) against mutated `process.env` states: missing `DATABASE_URL`, missing `OPENAI_API_KEY`, malformed `AUTH_URL`, invalid `KAIRO_OWNER_EMAIL`, multiple missing keys at once, and — matching Document 7 §12's "never log secrets" — a case that asserts a real-looking secret value never appears in the thrown error message.
+
+**Consistency Rationale:** Same standard as Amendment 15 — a documented behavior is only trustworthy once it's been made to fail on purpose and observed failing correctly, not just reasoned about.
+
+**Applied text change:** None to Document 7's rule text — this closes the verification gap Document 14 identified.
+
+---
+
+# 19. Amendment 17 — CI/CD Pipeline
+
+**Problem:** Document 7 §23 requires every PR to compile, lint, and pass tests, with "no broken main branch." Document 14 identified this as the single largest gap in the entire constitution: zero automation existed. Every green `tsc`/`eslint`/`prettier`/`build` result up to that point came from manual runs in this session — nothing would have stopped a broken commit from being pushed.
+
+**Chosen Solution:** `.github/workflows/ci.yml` — on every push and pull request: install, generate the Prisma client (required before typecheck/lint/build, since `generated/` is gitignored), `tsc --noEmit`, `eslint`, `prettier --check`, `prisma validate`, `npm test`, `next build`. Uses CI-only dummy environment values (never real secrets) — verified this is sufficient by running the entire sequence locally with PostgreSQL stopped entirely; `next build` does not query the database (no page does yet), so no live database service is needed in CI for this scope.
+
+**Consistency Rationale:** Document 9 Phase 0 listed "GitHub Actions (optional)" and it was skipped at the time. Document 14's matrix made the cost of that skip concrete rather than abstract, which is exactly what a compliance matrix is for — this amendment is the direct result of that tool doing its job.
+
+**Applied text change:** Document 9, Phase 0 deliverables — the "GitHub Actions (optional)" line annotated with when and why it was actually delivered.
+
+---
+
+# 20. Amendment Ledger Summary
 
 | # | Topic | Affected Document(s) | Status |
 |---|---|---|---|
@@ -234,8 +282,12 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 | 11 | Soft-delete enforcement mechanism | Doc 10 §4, Doc 3 §8 | Applied |
 | 12 | Raw SQL soft-delete documentation rule | Doc 7 §8 | Applied |
 | 13 | Archived-user authentication behavior | Doc 11 §6 | Applied |
+| 14 | `process.env` centralization enforcement | Doc 7 §13 (enforcement only, no text change) | Applied |
+| 15 | Markdown sanitization implemented | Doc 7 §21 (enforcement only, no text change) | Applied |
+| 16 | Environment validation failure-path tests | Doc 7 §11-13 (verification only, no text change) | Applied |
+| 17 | CI/CD pipeline | Doc 9 (Phase 0 deliverable annotated) | Applied |
 
-All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 10, and 11 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–13 originated from the Phase 2 architectural review (soft-delete hardening), not the original Phase 0 ingestion report — recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–13) is internally consistent as of this revision.
+All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint (Document 14's Architecture Compliance Matrix directly drove Amendments 14–17), not the original Phase 0 ingestion report — recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
 
 ---
 

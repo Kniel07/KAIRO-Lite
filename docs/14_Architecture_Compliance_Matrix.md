@@ -1,7 +1,8 @@
 # KAIRO-Lite
 ## Architecture Compliance Matrix
 
-Generated: after Phase 2 (Database) + soft-delete hardening review
+Generated: after Phase 2 (Database) + soft-delete hardening review + Infrastructure Hardening Sprint (Document 13 §16-19)
+Revision: 2 — regenerated, not hand-patched, after the sprint closed 4 of the gaps the first revision found (§15 below)
 Status: **Point-in-time audit report, not a constitutional document.** It does not define rules — Documents 1–13 do that. It inventories which of those rules are currently *automated* versus *dependent on human discipline*, as of this commit. It will go stale as Phase 3+ lands; regenerate rather than trust an old copy.
 
 ---
@@ -27,6 +28,7 @@ For every constitutional rule found across Documents 1–13, five columns:
 | `COMPILE-TIME` | TypeScript's type system makes a violation fail to compile. |
 | `LINT-TIME` | ESLint catches a violation (`npm run lint` / `next build`). |
 | `RUNTIME` | Enforced by code that executes (middleware, extension logic, validators). |
+| `CI` | Enforced by the GitHub Actions pipeline running on every push/PR — distinct from `RUNTIME` (app code) and `LINT-TIME`/`COMPILE-TIME` (a local dev run): this is "it runs automatically, remotely, on every change" as its own guarantee. Added in the Infrastructure Hardening Sprint (Document 13 §19, Amendment 17). |
 | `DATABASE` | Enforced by PostgreSQL itself (constraints, FK, generated columns, native enums). |
 | `PRISMA` | Enforced by the Prisma schema/client layer specifically (distinct from raw DATABASE, though often backed by one). |
 | `MANUAL REVIEW` | Requires a human (or an AI agent under review) to check; no tooling exists. |
@@ -134,13 +136,13 @@ A rule can have more than one type where enforcement is layered (e.g. `LINT-TIME
 | §10 | Never swallow errors; always log + rethrow | No lint rule enforces this pattern (e.g. no `no-empty` catch check added) | `AppError` taxonomy exists (`lib/utils/errors.ts`) and is used consistently by hand | `CONVENTION` |
 | §11 | All external input validated via Zod | `parseOrThrow()` helper exists; nothing forces its use since no route handler exists yet | `lib/validation/index.ts` | `N/A (not yet built)` for enforcement; helper itself is `COMPILE-TIME` typed |
 | §12 | Structured logging; never log secrets | Logger enforces structure via TS types; nothing scans for secret-shaped values | `lib/logger/index.ts` | `COMPILE-TIME` (structure) / `CONVENTION` (secret-safety) |
-| §13 | Never access `process.env` directly; centralize | **No lint rule blocks direct `process.env` access outside `config/env.ts`.** | `config/env.ts` is used correctly everywhere today, by hand | `CONVENTION` (real gap — `no-restricted-syntax` or `no-process-env` could close this and hasn't been added) |
+| §13 | Never access `process.env` directly; centralize | **Closed (Infrastructure Hardening Sprint, Doc 13 §16, Amendment 14).** ESLint `no-restricted-syntax` matches the `process.env` AST node itself, scoped to all TS files except `config/env.ts`, `prisma.config.ts`, and `tests/unit/env.test.ts` | `eslint.config.js` — verified live (a deliberate `process.env.OPENAI_API_KEY` access was confirmed to fail lint). One real prior violation (`lib/db/client.ts`'s `process.env.NODE_ENV`) fixed to route through `env.NODE_ENV` before the rule was added. | `LINT-TIME` |
 | §14 | API response envelope standard | `successResponse()`/`errorResponse()` helpers + typed `ApiResponse<T>` exist; no route handler exists yet to check compliance | `lib/utils/http.ts`, `types/api.ts` | `N/A (not yet built)` for enforcement; helpers are `COMPILE-TIME` typed |
 | §16 | Import order (external → internal alias → relative) | No `eslint-plugin-import` `order` rule configured | none | `CONVENTION` (gap) |
 | §18 | Testing hierarchy (unit → integration → e2e) | No tests exist yet | `tests/` folder structure only | `N/A (not yet built)` |
-| §21 | Validate input / escape output / **sanitize markdown** / protect secrets / verify auth / verify authz | Auth is `RUNTIME`-enforced (see Doc 11 below); **markdown sanitization has zero implementation** — `lib/markdown/` contains only `.gitkeep` | `middleware.ts` (auth only) | `RUNTIME` (auth) / **gap, `DOCUMENTED` only** (markdown sanitization — flagged explicitly, this is a real hole) |
+| §21 | Validate input / escape output / **sanitize markdown** / protect secrets / verify auth / verify authz | Auth is `RUNTIME`-enforced (see Doc 11 below). Markdown sanitization **closed (Infrastructure Hardening Sprint, Doc 13 §17, Amendment 15)**: two independent layers — `sanitizeMarkdown()`/`safeHtml()` (source-text stripping) and `renderMarkdown()` (rehype-sanitize on the parsed tree) | `middleware.ts` (auth), `lib/markdown/{sanitize,render}.ts` — proven against real `<script>`/`onerror`/`javascript:` payloads in `tests/unit/markdown.test.ts` (13 tests, all passing), not just compiled | `RUNTIME` (both auth and markdown) |
 | §22 | Accessibility: keyboard nav, screen readers, semantic HTML | `eslint-plugin-jsx-a11y`, bundled by `eslint-config-next`, is active | `eslint.config.js` (via `next/core-web-vitals`) | `LINT-TIME` — **but only at `warn` level**, not `error`; does not fail the build |
-| §23 | Every PR must compile, lint, pass tests | **No CI pipeline exists.** Document 9 Phase 0 listed "GitHub Actions (optional)" and it was never built. | none | `DOCUMENTED` only — nothing currently prevents a broken commit from being pushed except this session's own manual verification each time |
+| §23 | Every PR must compile, lint, pass tests | **Closed (Infrastructure Hardening Sprint, Doc 13 §19, Amendment 17).** `.github/workflows/ci.yml` runs on every push/PR: install → generate Prisma client → typecheck → lint → format:check → prisma validate → test → build | `.github/workflows/ci.yml` — the full sequence was simulated locally first, with PostgreSQL stopped entirely, using the same CI-only dummy env values, before being trusted; all steps passed | `CI` |
 | §25 | If code conflicts with documentation, documentation wins | This entire multi-turn review process | This conversation | `PROCESS` |
 | §26 | AI-generated code follows the same standards as human-written code | This entire multi-turn review process | This conversation | `PROCESS`, `MANUAL REVIEW` |
 
@@ -193,7 +195,7 @@ A rule can have more than one type where enforcement is layered (e.g. `LINT-TIME
 | §6 (amended, Doc 13 §15) | Archived users cannot authenticate | Same Prisma Client Extension as Doc 3 §8, applied to the same client the Adapter uses | `lib/db/soft-delete-extension.ts` + `lib/auth/index.ts` sharing one client instance | `RUNTIME` — logically sound, **not live-tested** (would require archiving a real user and attempting sign-in) |
 | §7 | Authorization lives in Services, ownership checks required | No Service exists yet | none | `N/A (not yet built)` |
 | §8 | Middleware performs a cheap presence check only | `middleware.ts` checks `req.auth` presence, delegates everything else | `middleware.ts` — build-verified only | `RUNTIME` (implemented) — not live-request-tested |
-| §9 | Env vars centralized, typed, Zod-validated | `config/env.ts` throws on missing/invalid vars | `config/env.ts` — the *success* path (all vars present) has been run many times; **the failure path (missing/invalid var) has not been explicitly tested this session** | `COMPILE-TIME` (Zod schema types) + `RUNTIME` (validation logic) — partially unverified |
+| §9 | Env vars centralized, typed, Zod-validated | `config/env.ts` throws on missing/invalid vars | **Failure path now tested (Infrastructure Hardening Sprint, Doc 13 §18, Amendment 16).** `tests/unit/env.test.ts` proves: missing `DATABASE_URL`, missing `OPENAI_API_KEY`, malformed `AUTH_URL`, invalid `KAIRO_OWNER_EMAIL`, multiple missing keys at once, and — separately — that a real-looking secret value never appears in the thrown message (7 tests, all passing) | `COMPILE-TIME` (Zod schema types) + `RUNTIME` (validation logic), both now test-verified |
 | §10 | Single-user MVP gate (`KAIRO_OWNER_EMAIL` allowlist) | `signIn` callback rejects non-matching emails | `lib/auth/index.ts` — **not live-tested** (no real sign-in attempt was made with a non-owner email) | `RUNTIME` (implemented) — verification level: code review only |
 
 ---
@@ -212,20 +214,32 @@ Every amendment either (a) resolves to a rule already covered under the document
 
 ---
 
-# 15. Summary — Rules Currently Enforced Only By Convention
+# 15. What Moved (Infrastructure Hardening Sprint, Document 13 §16-19)
 
-Pulled directly from the `CONVENTION` and gap-flagged rows above — this is the answer to "which parts of the architecture still depend entirely on human discipline":
+This section didn't exist in the first version of this matrix — it's the direct answer to "show what moved from CONVENTION to LINT/RUNTIME/CI":
 
-1. **`process.env` accessed only through `config/env.ts`** (Doc 7 §13) — no lint rule; a real, closeable gap.
-2. **Naming conventions** (Doc 6, most of it) — no automated casing/suffix checks (`*Repository`, `*Service`, `use*` hooks, PascalCase components).
-3. **Cross-feature import boundary** ("Features → UI Components from unrelated features" forbidden, Doc 5 §20) — no lint rule.
-4. **Service-layer requirements generally** (Doc 7 §7, §8) — moot until Phase 3 introduces the first Service, but worth building the lint rule *before* the first violation is possible, not after.
-5. **No `ts-ignore` without justification, import ordering, catch-block error handling** (Doc 7 §3, §10, §16) — all currently unchecked.
-6. **CI/CD** (Doc 7 §23) — the single largest gap. Nothing outside this session's manual `tsc`/`eslint`/`build` runs prevents a broken commit from reaching the branch.
-7. **Markdown sanitization** (Doc 7 §21) — not a "convention that could be forgotten," an outright unimplemented requirement. `lib/markdown/` is empty.
-8. **Phase-gating itself** (Doc 9) — the entire "don't proceed past what's been approved" control is `PROCESS`, enforced by the AI agent's compliance each turn, not by anything in the repository. This is worth naming explicitly: it is the largest-blast-radius rule in the whole constitution, and it is also the one with zero technical backing.
+| Rule | Before | After | Amendment |
+|---|---|---|---|
+| `process.env` centralization (Doc 7 §13) | `CONVENTION` (real gap) | `LINT-TIME` | Doc 13 §16, Amendment 14 |
+| Markdown sanitization (Doc 7 §21) | Missing entirely (`lib/markdown/` empty) | `RUNTIME`, proven against real XSS payloads | Doc 13 §17, Amendment 15 |
+| Env validation failure path (Doc 11 §9) | `RUNTIME` (implemented, not exercised) | `RUNTIME`, now test-verified | Doc 13 §18, Amendment 16 |
+| CI/CD (Doc 7 §23) | `DOCUMENTED` only, zero automation | `CI` | Doc 13 §19, Amendment 17 |
 
-Everything **not** on this list that claims `RUNTIME`/`LINT-TIME`/`COMPILE-TIME`/`DATABASE`/`PRISMA` enforcement above has been verified working — most against a live Postgres instance or a live ESLint violation, not just by inspection. The two `RUNTIME` items marked "not live-tested" (auth flow, env-validation failure path) are implemented and structurally verified (they compile, and the code paths are straightforward) but have not been exercised end-to-end with a real request in this session — worth a deliberate note rather than letting "RUNTIME" imply more confidence than earned.
+Four rules moved from "depends on someone remembering" to "the system itself won't let it happen quietly." None of them were architecture changes — every one closed a gap the *previous* version of this matrix found, which is the entire point of regenerating it instead of trusting an old copy.
+
+---
+
+# 16. Summary — Rules Still Enforced Only By Convention
+
+Pulled directly from the remaining `CONVENTION` and gap-flagged rows above — this is the answer to "which parts of the architecture still depend entirely on human discipline," now that §15's four items are closed:
+
+1. **Naming conventions** (Doc 6, most of it) — no automated casing/suffix checks (`*Repository`, `*Service`, `use*` hooks, PascalCase components).
+2. **Cross-feature import boundary** ("Features → UI Components from unrelated features" forbidden, Doc 5 §20) — no lint rule.
+3. **Service-layer requirements generally** (Doc 7 §7, §8) — moot until Phase 3 introduces the first Service, but worth building the lint rule *before* the first violation is possible, not after.
+4. **No `ts-ignore` without justification, import ordering, catch-block error handling** (Doc 7 §3, §10, §16) — all currently unchecked.
+5. **Phase-gating itself** (Doc 9) — the entire "don't proceed past what's been approved" control is `PROCESS`, enforced by the AI agent's compliance each turn, not by anything in the repository. This is worth naming explicitly: it is the largest-blast-radius rule in the whole constitution, and it is also the one with zero technical backing — **and, per this review, that's intentional and correct.** Some gates shouldn't be automated; approving architecture is one of them.
+
+Everything **not** on this list that claims `RUNTIME`/`LINT-TIME`/`COMPILE-TIME`/`DATABASE`/`PRISMA`/`CI` enforcement above has been verified working — against a live Postgres instance, a live ESLint violation, a real test run, or (for CI) a full local simulation of the pipeline with Postgres stopped entirely — not just by inspection. One `RUNTIME` item remains marked "not live-tested": the Auth.js magic-link sign-in flow and middleware's actual HTTP-request behavior are implemented and structurally verified (they compile, the logic is straightforward, and the env-validation half of this exact concern was closed this sprint), but nobody has run `next dev` and made a real request in this session. Worth carrying forward as a deliberate note rather than letting "RUNTIME" imply more confidence than earned — this is squarely in scope for Phase 3, once real routes exist to test against.
 
 ---
 

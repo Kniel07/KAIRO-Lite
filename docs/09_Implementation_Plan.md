@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Implementation Plan
 
-Version: 1.1 (amended)
+Version: 1.2 (amended)
 Status: Approved
 
 ---
@@ -105,7 +105,7 @@ Deliverables
 - shadcn/ui installed
 - Environment configuration
 - Path aliases
-- GitHub Actions (optional)
+- GitHub Actions — delivered during the Phase 2 Infrastructure Hardening Sprint (Document 13 §16-19), not at Phase 0 itself; the Architecture Compliance Matrix (Document 14) surfaced its absence as the largest outstanding gap, prompting it before Phase 3 rather than after
 
 Exit Criteria
 

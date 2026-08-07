@@ -1,0 +1,66 @@
+name: CI
+
+# Document 7 §23 — "Every Pull Request must: Compile, Pass linting, Pass
+# tests... No broken main branch." Document 13 §16-19 (Infrastructure
+# Hardening Sprint) — previously nothing enforced this except a human (or
+# an AI agent) remembering to run these commands locally, every time. This
+# workflow is that enforcement.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ci:
+    name: TypeScript, ESLint, Prettier, Prisma, Tests, Build
+    runs-on: ubuntu-latest
+    # Document 11 §9 — these are CI-only dummy values, never real secrets.
+    # No live database is required: `prisma validate`/`generate` only need
+    # a syntactically present DATABASE_URL, and `next build` never queries
+    # the database (verified locally with PostgreSQL stopped entirely —
+    # no page performs a Prisma query yet).
+    env:
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+      AUTH_SECRET: "ci-only-dummy-secret-not-a-real-credential"
+      AUTH_URL: "http://localhost:3000"
+      RESEND_API_KEY: "ci-only-dummy-key"
+      KAIRO_OWNER_EMAIL: "ci@example.com"
+      OPENAI_API_KEY: "ci-only-dummy-key"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Must run before typecheck/lint/build — `@/generated/prisma/client`
+      # is gitignored (regenerated, not committed) and the app's own
+      # types/imports depend on it existing.
+      - name: Generate Prisma Client
+        run: npm run db:generate
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Prettier (check only)
+        run: npm run format:check
+
+      - name: Prisma schema validation
+        run: npx prisma validate
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Next.js production build
+        run: npm run build

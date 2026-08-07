@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Folder Structure
 
-Version: 1.1 (amended)
+Version: 1.2 (amended)
 Status: Approved
 
 ---
@@ -408,11 +408,13 @@ docs/
 12_AI_Prompt_Library.md
 
 13_Architecture_Amendments.md
+
+14_Architecture_Compliance_Matrix.md
 ```
 
-<!-- Amended: Documents 10-13 added per the Phase 0 constitutional expansion. See Document 13. -->
+<!-- Amended: Documents 10-13 added per the Phase 0 constitutional expansion. See Document 13. Document 14 added per the Phase 2 hardening review (Document 13 §16-19) — it is explicitly NOT part of the constitution proper (see its own header): it's a point-in-time audit report over Documents 1-13, not a rule-defining document, and is expected to go stale and be regenerated rather than hand-maintained. Listed here for discoverability only. -->
 
-These documents are the project constitution.
+Documents 1-13 are the project constitution. Document 14 is a derived audit artifact, regenerated as needed.
 
 ---
 

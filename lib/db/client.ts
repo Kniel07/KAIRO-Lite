@@ -1,6 +1,7 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { databaseConfig } from "@/config/database";
+import { env } from "@/config/env";
 import { softDeleteExtension } from "@/lib/db/soft-delete-extension";
 
 // Standard Next.js pattern — avoids exhausting database connections from a
@@ -28,6 +29,6 @@ const globalForPrisma = globalThis as unknown as {
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== "production") {
+if (env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
