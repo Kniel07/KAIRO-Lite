@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Architecture Amendments
 
-Version: 1.4 (applied)
+Version: 1.5 (applied)
 Status: Applied — approved by the project owner. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been updated in place to reflect every amendment below.
 
 ---
@@ -282,7 +282,19 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 
 ---
 
-# 21. Amendment Ledger Summary
+# 21. Amendment 19 — Component/Page → Service Boundary Enforcement
+
+**Problem:** Document 7 §8's chain (`Component → Route → Service → Repository → Prisma`, "no shortcuts") was always the rule, but it was unenforceable before Phase 3 — no Service existed for a Component to shortcut to. The Document 14 Revision 3 pre-Phase-4 audit found this had become a real, live gap the moment Phase 3 landed: nothing blocked `components/**` or `app/**` from importing a Service directly, confirmed by a deliberate violating import that compiled and linted clean.
+
+**Chosen Solution:** An ESLint `no-restricted-imports` rule blocking `@/features/*/services/**` from `components/**` and `app/**`, with `app/api/**` (Route Handlers) explicitly exempt — that's the one place in the chain a Service call belongs. Identical shape to every other dependency-boundary rule in `eslint.config.js` (Component→Prisma, `ai/`→`features/`, Service→Prisma). Verified live: deliberate violations in both a page and a component file were confirmed to fail lint with the expected message; the identical import inside a Route Handler was confirmed to still pass; all scratch files were then removed and the full verification suite (`tsc`, `eslint`, `prettier`, `prisma validate`, 78 tests) re-confirmed clean.
+
+**Consistency Rationale:** No new rule was invented — this is Document 7 §8's existing chain, automated the same way every other layer of it already is. The exemption boundary (`app/api/**` only) was not a judgment call requiring a design decision: Document 7 §8's own chain names exactly one place between Component and Service, so the exemption has exactly one shape.
+
+**Applied text change:** None to the rule text itself (Document 7 §8 already stated the chain) — this closes the enforcement gap Document 14 Revision 3 identified, recorded here for traceability, same pattern as Amendment 14.
+
+---
+
+# 22. Amendment Ledger Summary
 
 | # | Topic | Affected Document(s) | Status |
 |---|---|---|---|
@@ -305,8 +317,9 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 | 16 | Environment validation failure-path tests | Doc 7 §11-13 (verification only, no text change) | Applied |
 | 17 | CI/CD pipeline | Doc 9 (Phase 0 deliverable annotated) | Applied |
 | 18 | Phase 3 backend services architecture (transaction boundaries, governance read path, note conversion) | Doc 7 §8, Doc 9 Phase 3 | Applied |
+| 19 | Component/page → Service boundary enforcement | Doc 7 §8 (enforcement only, no text change) | Applied |
 
-All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint (Document 14's Architecture Compliance Matrix directly drove Amendments 14–17); Amendment 18 originated from the Phase 3 implementation itself. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
+All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint; Amendment 18 originated from the Phase 3 implementation itself; Amendment 19 originated from the Document 14 Revision 3 pre-Phase-4 audit that Phase 3's own completion triggered. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
 
 ---
 

@@ -49,6 +49,31 @@ module.exports = [
       ],
     },
   },
+  // Document 7 §8 (Phase 3 pre-Phase-4 hardening patch) — "Component →
+  // Route → Service → Repository → Prisma. No shortcuts." The Compliance
+  // Matrix audit (Document 14 Revision 3, §17-18) found this edge
+  // unenforced once Services existed to import: nothing blocked
+  // `components/**`/`app/**` from importing a Service directly, skipping
+  // the Route Handler layer. `app/api/**` is exempt — Route Handlers are
+  // exactly where a Service call belongs.
+  {
+    files: ["components/**/*.{ts,tsx}", "app/**/*.{ts,tsx}"],
+    ignores: ["app/api/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/features/*/services/*", "@/features/*/services/**"],
+              message:
+                "Components/pages never call a Service directly (Document 7 §8). Go through a Route Handler (app/api/**).",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Document 5 §20 (amended, Document 13 §4) — `ai/` never depends on
   // `features/`; context retrieval reads via the Repository layer instead.
   {
