@@ -1,13 +1,23 @@
 // KAIRO-Lite — Prisma Schema
 // Source of truth: Document 10 (Prisma Data Model Specification)
 //
-// Phase 0/1 scope only: this file contains infrastructure models required to
-// "Configure Auth.js" (Document 9, Phase 0) — the User entity and the Auth.js
-// v5 Prisma Adapter's required models (Account, Session, VerificationToken).
+// Phase 2 (Database) — full domain model. Phase 0/1 only established the
+// Auth.js adapter models (User, Account, Session, VerificationToken); this
+// adds Project, Note, Knowledge, Document, Task, Tag, Conversation, Message,
+// AuditLog, Settings, and GovernanceRule per Document 10 §5, plus the
+// relations back onto User.
 //
-// TODO(Document 10 §5, Phase 2 — Database): add the remaining domain models
-// (Project, Note, Knowledge, Document, Task, Tag, Conversation, Message,
-// AuditLog, Settings, GovernanceRule) and their relations back onto User.
+// Self-correction: Document 10 §5.1 listed `documents[]` as a User relation,
+// but §5.5's Document field list (and Document 3 §5's relationship diagram,
+// which nests Documents under Projects, not directly under User) has no
+// User FK on Document. That was a drafting inconsistency in Document 10
+// itself — implemented here per the authoritative field-level spec (§5.5);
+// flagged for a Document 10 §5.1 correction rather than silently carried
+// through.
+//
+// The Knowledge full-text search index (Document 10 §8) is added via raw
+// SQL in the migration, not declared here — Prisma has no native Postgres
+// tsvector/GIN column type; see prisma/migrations/*/migration.sql.
 
 generator client {
   provider = "prisma-client"
@@ -29,6 +39,13 @@ model User {
 
   accounts Account[]
   sessions Session[]
+
+  projects      Project[]
+  notes         Note[]         @relation("NoteAuthor")
+  tasksAssigned Task[]         @relation("TaskAssignee")
+  conversations Conversation[]
+  settings      Settings?
+  auditLogs     AuditLog[]     @relation("AuditActor")
 
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
@@ -87,4 +104,343 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+/// Document 10 §5.2 — a single initiative.
+model Project {
+  id          String            @id @default(uuid(7))
+  name        String
+  slug        String            @unique
+  description String?           @db.Text
+  status      ProjectStatus     @default(ACTIVE)
+  priority    ProjectPriority   @default(MEDIUM)
+  visibility  ProjectVisibility @default(PRIVATE)
+  ownerId     String
+
+  owner         User           @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  notes         Note[]
+  documents     Document[]
+  knowledge     Knowledge[]
+  tasks         Task[]
+  conversations Conversation[]
+  tags          Tag[]
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@map("projects")
+}
+
+/// Document 6 §10 — sourced verbatim.
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+  COMPLETED
+}
+
+enum ProjectPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ProjectVisibility {
+  PRIVATE
+  PUBLIC
+}
+
+/// Document 10 §5.3 — quick knowledge capture.
+model Note {
+  id        String     @id @default(uuid(7))
+  title     String
+  content   String     @db.Text
+  projectId String?
+  authorId  String
+  noteType  NoteType   @default(IDEA)
+  source    NoteSource @default(MANUAL)
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  author  User     @relation("NoteAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  tags    Tag[]
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  @@index([projectId])
+  @@index([authorId])
+  @@index([noteType])
+  @@index([createdAt])
+  @@map("notes")
+}
+
+enum NoteType {
+  IDEA
+  REFERENCE
+  JOURNAL
+  TASK_DRAFT
+}
+
+enum NoteSource {
+  MANUAL
+  AI
+  IMPORT
+}
+
+/// Document 10 §5.4 — permanent structured information.
+model Knowledge {
+  id         String          @id @default(uuid(7))
+  title      String
+  summary    String?         @db.Text
+  markdown   String          @db.Text
+  projectId  String?
+  category   String
+  confidence Float           @default(0.5)
+  status     KnowledgeStatus @default(DRAFT)
+
+  project          Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tags             Tag[]
+  relatedDocuments Document[] @relation("KnowledgeDocuments")
+  citedInMessages  Message[]  @relation("MessageCitations")
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  @@index([projectId])
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@map("knowledge")
+}
+
+enum KnowledgeStatus {
+  DRAFT
+  VALIDATED
+  DEPRECATED
+}
+
+/// Document 10 §5.5 — formal documentation.
+model Document {
+  id        String       @id @default(uuid(7))
+  title     String
+  type      DocumentType @default(GUIDE)
+  projectId String
+  markdown  String       @db.Text
+  version   Int          @default(1)
+  published Boolean      @default(false)
+
+  project          Project     @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  tags             Tag[]
+  relatedKnowledge Knowledge[] @relation("KnowledgeDocuments")
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  @@index([projectId])
+  @@index([type])
+  @@index([published])
+  @@index([createdAt])
+  @@map("documents")
+}
+
+enum DocumentType {
+  SPEC
+  GUIDE
+  ARCHITECTURE
+  REPORT
+  OTHER
+}
+
+/// Document 10 §5.6 — schema placeholder only (Document 13 §6, Amendment 5).
+/// Not exposed by any Service, API route, or UI until explicitly greenlit.
+model Task {
+  id         String       @id @default(uuid(7))
+  title      String
+  status     TaskStatus   @default(TODO)
+  priority   TaskPriority @default(MEDIUM)
+  dueDate    DateTime?
+  assigneeId String?
+  projectId  String
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  assignee User?   @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+/// Document 10 §5.7 — reusable classification.
+model Tag {
+  id    String @id @default(uuid(7))
+  name  String @unique
+  color String
+
+  projects  Project[]
+  knowledge Knowledge[]
+  notes     Note[]
+  documents Document[]
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  @@map("tags")
+}
+
+/// Document 10 §5.8 — stores AI conversations.
+model Conversation {
+  id        String  @id @default(uuid(7))
+  projectId String?
+  userId    String
+  title     String?
+  model     String
+
+  project  Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  messages Message[]
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("conversations")
+}
+
+/// Document 10 §5.9 — immutable, append-only.
+model Message {
+  id             String      @id @default(uuid(7))
+  conversationId String
+  role           MessageRole
+  content        String      @db.Text
+  mode           AIMode?
+  tokenCount     Int?
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  citedKnowledge Knowledge[]  @relation("MessageCitations")
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([role])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+/// Document 4 §4 — sourced verbatim.
+enum AIMode {
+  THINK
+  VALIDATE
+  DOCUMENT
+  IMPLEMENT
+}
+
+/// Document 10 §5.10 — immutable audit trail.
+model AuditLog {
+  id        String         @id @default(uuid(7))
+  entity    String
+  entityId  String
+  operation AuditOperation
+  actorId   String?
+  actorType ActorType      @default(USER)
+  timestamp DateTime       @default(now())
+  before    Json?
+  after     Json?
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([actorId])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+/// Document 3 §9 — sourced verbatim.
+enum AuditOperation {
+  CREATE
+  UPDATE
+  ARCHIVE
+  RESTORE
+  DELETE
+  AI_EDIT
+  GOVERNANCE_CHANGE
+}
+
+enum ActorType {
+  USER
+  AI
+  SYSTEM
+}
+
+/// Document 10 §5.11 — user preferences, 1:1 with User.
+model Settings {
+  id            String @id @default(uuid(7))
+  userId        String @unique
+  theme         Theme  @default(SYSTEM)
+  defaultModel  String
+  aiTemperature Float  @default(0.7)
+  language      String @default("en")
+  timezone      String @default("UTC")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+/// Document 10 §5.12 / Document 13 §4 — minimal key-value governance config.
+/// Not a rules engine.
+model GovernanceRule {
+  id          String  @id @default(uuid(7))
+  key         String  @unique
+  value       Json
+  description String?
+
+  updatedAt DateTime @updatedAt
+
+  @@map("governance_rules")
 }

@@ -2,29 +2,31 @@
 
 An AI-native Personal Operating System. See `docs/` for the full project constitution (Documents 1-13) — the source of truth for architecture, database design, AI architecture, folder structure, naming conventions, coding standards, API contracts, and the implementation plan.
 
-Current status: **Phase 0 (Project Foundation) and Phase 1 (Core Infrastructure)** complete, per `docs/09_Implementation_Plan.md`.
+Current status: **Phase 0 (Project Foundation), Phase 1 (Core Infrastructure), and Phase 2 (Database)** complete, per `docs/09_Implementation_Plan.md`.
 
 ## Getting started
 
 ```bash
-cp .env.example .env   # fill in real values
+cp .env.example .env   # fill in real values, including a running PostgreSQL DATABASE_URL
 npm install
 npm run db:generate    # generate the Prisma client
+npm run db:migrate     # apply migrations
+npm run db:seed        # seed the single OWNER user (Document 11 §10)
 npm run dev
 ```
 
 ## Scripts
 
-| Command | Purpose |
-|---|---|
-| `npm run dev` | Start the Next.js dev server |
-| `npm run build` | Production build |
-| `npm run lint` | ESLint |
-| `npm run format` | Prettier (write) |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm run db:generate` | Regenerate the Prisma client |
-| `npm run db:migrate` | Run Prisma migrations (Phase 2+) |
-| `npm run db:seed` | Run the seed script (Phase 2+) |
+| Command               | Purpose                          |
+| --------------------- | -------------------------------- |
+| `npm run dev`         | Start the Next.js dev server     |
+| `npm run build`       | Production build                 |
+| `npm run lint`        | ESLint                           |
+| `npm run format`      | Prettier (write)                 |
+| `npm run typecheck`   | `tsc --noEmit`                   |
+| `npm run db:generate` | Regenerate the Prisma client     |
+| `npm run db:migrate`  | Run Prisma migrations (Phase 2+) |
+| `npm run db:seed`     | Run the seed script (Phase 2+)   |
 
 ## Documentation
 
