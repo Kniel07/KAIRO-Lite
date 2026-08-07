@@ -1,8 +1,8 @@
 # KAIRO-Lite
 ## Prisma Data Model Specification
 
-Version: 1.0
-Status: Proposed (Amendment — pending approval)
+Version: 1.2 (amended)
+Status: Approved
 Supersedes: Fills gaps left open by Document 3 (Database Design). Does not contradict it.
 
 ---
@@ -43,7 +43,11 @@ Document 3 §7 requires UUID v7 (preferred) with UUID v4 fallback, no auto-incre
 
 # 4. Soft-Delete Strategy
 
-Per Doc 3 §8: every primary business entity carries a nullable `archivedAt DateTime?`. Default queries exclude non-null `archivedAt` rows at the Repository layer (Repository, not Prisma middleware — keeps behavior explicit and testable per Doc 7 §2).
+Per Doc 3 §8: every primary business entity carries a nullable `archivedAt DateTime?`. Default queries exclude non-null `archivedAt` rows.
+
+**Enforcement mechanism (superseded during the Phase 2 hardening review — Document 13 §14, Amendment 12):** this section originally specified Repository-layer filtering ("not Prisma middleware — keeps behavior explicit and testable"). In practice that meant every repository method had to remember to apply the filter, which is a convention, not a guarantee — confirmed as a real gap during Phase 2 review. It is now enforced by a **Prisma Client Extension** (`lib/db/soft-delete-extension.ts`), applied once when the shared client is constructed, covering the soft-deletable models: `User`, `Project`, `Note`, `Knowledge`, `Document`, `Tag`, `Conversation` (every model with `archivedAt` except `Task`, which stays RESERVED and unreferenced by name in any application code, including this list). The extension auto-injects `archivedAt: null` into read operations (`findFirst`/`findFirstOrThrow`/`findMany`/`findUnique`/`findUniqueOrThrow`/`count`) unless the caller's `where` already mentions `archivedAt` — that is the escape hatch, exposed on repositories as `findArchived()`, `findIncludingArchived()`, and `restore()`. Mutations are deliberately not intercepted, since `restore()` must be able to `update()` an already-archived row by id.
+
+**Limitation:** the extension only covers Prisma Client's model methods. `$queryRaw`/`$executeRaw` bypass it entirely — see Document 7 §8's raw SQL rule.
 
 **Clarification (fills an implicit gap):** `archivedAt` is a *system-level lifecycle marker*, independent from business-status enums like `ProjectStatus`. A `Project` can have `status: ARCHIVED` (business state, still visible in "Archived Projects" views) without `archivedAt` being set. `archivedAt` is only populated when a record should disappear from default queries entirely (the Doc 3 §8 soft-delete mechanism). This preserves both concepts as documented without merging them.
 

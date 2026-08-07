@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Database Design
 
-Version: 1.1 (amended)
+Version: 1.2 (amended)
 Status: Approved
 
 ---
@@ -351,6 +351,8 @@ archivedAt
 is populated.
 
 Queries ignore archived records unless explicitly requested.
+
+Enforcement mechanism: a Prisma Client Extension (Document 10 §4, Document 13 §14 Amendment 12), applied once to the shared Prisma Client — not a convention every repository must remember. It only covers Prisma Client's own model methods; raw SQL (`$queryRaw`/`$executeRaw`) bypasses it entirely and must handle `archivedAt` explicitly (Document 7 §8).
 
 ---
 

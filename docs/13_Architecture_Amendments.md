@@ -1,8 +1,8 @@
 # KAIRO-Lite
 ## Architecture Amendments
 
-Version: 1.1 (applied)
-Status: Applied — approved by the project owner. Documents 1, 3, 4, 5, 6, and 8 have been updated in place (each now at version 1.1) to reflect every amendment below.
+Version: 1.2 (applied)
+Status: Applied — approved by the project owner. Documents 1, 3, 4, 5, 6, 7, 8, 10, and 11 have been updated in place to reflect every amendment below.
 
 ---
 
@@ -180,7 +180,43 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 
 ---
 
-# 13. Amendment Ledger Summary
+# 13. Amendment 11 — Soft-Delete Enforcement Mechanism (Phase 2 review)
+
+**Problem:** Document 10 §4 originally specified soft-delete filtering "at the Repository layer (Repository, not Prisma middleware)." During Phase 2 review, this was identified as enforcing the invariant by convention only — every repository had to remember to apply `notArchived()`, nothing structurally prevented a new method (or a caller bypassing the repository entirely) from forgetting it.
+
+**Chosen Solution:** A Prisma Client Extension (`lib/db/soft-delete-extension.ts`), applied once to the shared Prisma Client, auto-injects `archivedAt: null` into read operations on soft-deletable models unless the caller's `where` already mentions `archivedAt`. Verified live: calling `prisma.project.findMany()` directly — bypassing every repository — still excludes an archived row.
+
+**Consistency Rationale:** This doesn't contradict Document 10 §4's original text so much as correct an implementation detail within it — the goal ("default queries exclude archived records," Document 3 §8) is unchanged; only the mechanism moved from a per-call convention to a single infrastructure-layer guarantee, which is a strictly stronger implementation of the same rule, not a different rule. Escape hatches (`findArchived()`, `findIncludingArchived()`, `restore()`) preserve every existing capability.
+
+**Applied text change:** Document 10 §4 rewritten to describe the extension as the enforcement mechanism. Document 3 §8 gained a one-line cross-reference. Document 7 §8 gained a new rule: raw SQL bypasses the extension, so every `$queryRaw`/`$executeRaw` use must document its own `archivedAt` handling.
+
+---
+
+# 14. Amendment 12 — Raw SQL Soft-Delete Documentation Rule
+
+**Problem:** The Prisma Client Extension from Amendment 11 only intercepts Prisma Client's model methods. `$queryRaw`/`$executeRaw` — which the future `SearchRepository` (Phase 6) will use for full-text search over `searchVector` — bypass it entirely. Nothing prevented a future raw query from silently leaking archived rows.
+
+**Chosen Solution:** A new rule in Document 7 §8: every raw SQL query must explicitly document its soft-delete behavior — either include an `archivedAt` filter, or comment explaining why it intentionally doesn't. This is a documentation/review requirement (Document 7 §8's existing category — coding standards), not a new technical mechanism; raw SQL is, by definition, outside what a Prisma-level extension can reach.
+
+**Consistency Rationale:** Document 7 already governs code-review-enforced conventions (e.g. "no `ts-ignore` without justification," §3). This rule is the same shape: it doesn't invent new infrastructure, it closes a documented, known gap in existing infrastructure (Amendment 11) the same way Document 7's other "must justify in a comment" rules do.
+
+**Applied text change:** Document 7 §8, new paragraph. Document 10 §4, "Limitation" note added.
+
+---
+
+# 15. Amendment 13 — Archived-User Authentication Behavior
+
+**Problem:** Amendment 11's extension applies to the same shared Prisma Client the Auth.js Prisma Adapter uses (Document 11 §2). This has a real consequence — an archived `User` cannot authenticate — that no document stated.
+
+**Chosen Solution:** Document this as intended behavior, not a special case. No code change: it already happens as a direct, correct consequence of Amendment 11 applying globally to the shared client, exactly as designed.
+
+**Consistency Rationale:** Document 1 §4's core principle "Knowledge should never be lost" is about data, not access — soft-deleting a user revoking their access is consistent with, not contrary to, how soft delete is documented to work everywhere else (Document 3 §8: archived records are excluded from default resolution). No document ever promised archived users could still sign in; this is simply the first place that consequence became concrete enough to write down.
+
+**Applied text change:** Document 11 §6, new paragraph.
+
+---
+
+# 16. Amendment Ledger Summary
 
 | # | Topic | Affected Document(s) | Status |
 |---|---|---|---|
@@ -194,9 +230,12 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 | 8 | Settings ownership | Doc 3 §4 | Applied |
 | 9 | Tags API | Doc 8 (new §9a) | Applied |
 | 10 | Conversations API | Doc 8 (new §14a) | Applied |
-| 11 | `ReviewPrompt` naming | None (clarification only) | Confirmed |
+| — | `ReviewPrompt` naming | None (clarification only) | Confirmed |
+| 11 | Soft-delete enforcement mechanism | Doc 10 §4, Doc 3 §8 | Applied |
+| 12 | Raw SQL soft-delete documentation rule | Doc 7 §8 | Applied |
+| 13 | Archived-user authentication behavior | Doc 11 §6 | Applied |
 
-All items are now Applied. Documents 1, 3, 4, 5, 6, and 8 have been edited in place (version 1.1 each, with inline `<!-- Amended -->` markers), and Document 9's Final Approval Gate (§9) now references Documents 1–13. The full constitution (Documents 1–13) is internally consistent as of this revision.
+All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 10, and 11 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–13 originated from the Phase 2 architectural review (soft-delete hardening), not the original Phase 0 ingestion report — recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–13) is internally consistent as of this revision.
 
 ---
 

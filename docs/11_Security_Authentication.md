@@ -1,8 +1,8 @@
 # KAIRO-Lite
 ## Security & Authentication
 
-Version: 1.0
-Status: Proposed (Amendment — pending approval)
+Version: 1.1 (amended)
+Status: Approved
 Resolves: Ingestion Report Critical Q1 (auth library/strategy), Q2 (User model — see Document 10 §5.1)
 
 ---
@@ -74,6 +74,8 @@ Fully specified in Document 10 §5.1. Summary: `email`, `name`, `image`, `emailV
 | Session update age | 24 hours (sliding refresh) | Standard Auth.js default |
 | Sign-in flow | User submits email → Resend sends magic link → link redeems `VerificationToken` → `Session` row created |
 | Sign-out | Deletes the `Session` row (server-side revocation, stronger than JWT expiry-only logout) |
+
+**Archived users cannot authenticate (Document 13 §14, Amendment 13):** the Auth.js Prisma Adapter (§2) uses the same shared, soft-delete-extended Prisma Client as every repository (Document 10 §4). Its internal `User`/`Session` lookups during sign-in and session resolution are therefore also subject to the extension's automatic `archivedAt: null` filtering. A `User` row with `archivedAt` set cannot be found by the adapter, and so cannot sign in or have an existing session resolved — soft-deleting a user functions as a full access revocation, not merely a visibility change. This is the intended, natural consequence of soft delete, not a special case that needed separate implementation; it is documented here because it's a real behavior a reviewer should know about, not because it required different code.
 
 ---
 

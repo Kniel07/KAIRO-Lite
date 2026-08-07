@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Coding Standards
 
-Version: 1.0
+Version: 1.1 (amended)
 Status: Approved
 
 ---
@@ -165,6 +165,8 @@ Prisma
 ```
 
 No shortcuts.
+
+**Raw SQL and soft delete** (Document 13 §14, Amendment 12): the Prisma Client Extension that enforces soft-delete (Document 10 §4) only intercepts Prisma Client's model methods — it does not intercept `$queryRaw`/`$executeRaw`. Every raw SQL query must explicitly document its soft-delete behavior. Every repository using `$queryRaw` must either include an `archivedAt` filter itself or explain in a comment why it intentionally doesn't. This is not optional context — a raw query with neither is a defect, not a style issue.
 
 ---
 
