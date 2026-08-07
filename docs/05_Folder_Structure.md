@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Folder Structure
 
-Version: 1.2 (amended)
+Version: 1.3 (amended)
 Status: Approved
 
 ---
@@ -410,11 +410,13 @@ docs/
 13_Architecture_Amendments.md
 
 14_Architecture_Compliance_Matrix.md
+
+15_Technical_Debt_Register.md
 ```
 
-<!-- Amended: Documents 10-13 added per the Phase 0 constitutional expansion. See Document 13. Document 14 added per the Phase 2 hardening review (Document 13 §16-19) — it is explicitly NOT part of the constitution proper (see its own header): it's a point-in-time audit report over Documents 1-13, not a rule-defining document, and is expected to go stale and be regenerated rather than hand-maintained. Listed here for discoverability only. -->
+<!-- Amended: Documents 10-13 added per the Phase 0 constitutional expansion. See Document 13. Document 14 added per the Phase 2 hardening review (Document 13 §16-19) — it is explicitly NOT part of the constitution proper (see its own header): it's a point-in-time audit report over Documents 1-13, not a rule-defining document, and is expected to go stale and be regenerated rather than hand-maintained. Document 15 added the same way, same non-constitutional standing — it records conscious trade-offs, not rules. Both listed here for discoverability only. -->
 
-Documents 1-13 are the project constitution. Document 14 is a derived audit artifact, regenerated as needed.
+Documents 1-13 are the project constitution. Documents 14-15 are derived artifacts (an audit report and a debt register), regenerated/updated as needed rather than treated as source-of-truth rules.
 
 ---
 
