@@ -1,0 +1,90 @@
+// KAIRO-Lite — Prisma Schema
+// Source of truth: Document 10 (Prisma Data Model Specification)
+//
+// Phase 0/1 scope only: this file contains infrastructure models required to
+// "Configure Auth.js" (Document 9, Phase 0) — the User entity and the Auth.js
+// v5 Prisma Adapter's required models (Account, Session, VerificationToken).
+//
+// TODO(Document 10 §5, Phase 2 — Database): add the remaining domain models
+// (Project, Note, Knowledge, Document, Task, Tag, Conversation, Message,
+// AuditLog, Settings, GovernanceRule) and their relations back onto User.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Document 10 §5.1 — application owner.
+model User {
+  id            String    @id @default(uuid(7))
+  email         String    @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  role          UserRole  @default(OWNER)
+
+  accounts Account[]
+  sessions Session[]
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  @@map("users")
+}
+
+/// Document 10 §5.1 — MVP creates only OWNER rows (Document 11 §10).
+/// MEMBER is reserved for Phase 9 multi-user expansion.
+enum UserRole {
+  OWNER
+  MEMBER
+}
+
+/// Document 10 §6 — Auth.js Prisma Adapter model. Shape fixed by the library.
+model Account {
+  id                String  @id @default(uuid(7))
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+/// Document 10 §6 — Auth.js Prisma Adapter model. Database session strategy
+/// (Document 11 §2, §6).
+model Session {
+  id           String   @id @default(uuid(7))
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+/// Document 10 §6 — Auth.js Prisma Adapter model, backs the Email
+/// (magic-link) provider (Document 11 §4).
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
