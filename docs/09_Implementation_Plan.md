@@ -1,0 +1,457 @@
+# KAIRO-Lite
+## Implementation Plan
+
+Version: 1.1 (amended)
+Status: Approved
+
+---
+
+# 1. Purpose
+
+This document defines the official implementation sequence for KAIRO-Lite.
+
+The objective is to minimize technical debt, reduce rework, and ensure every feature is built on a stable architectural foundation.
+
+Implementation follows a **documentation-first** approach.
+
+No feature should be implemented before its corresponding architecture and data model are approved.
+
+---
+
+# 2. Guiding Principles
+
+Implementation priorities are based on dependency order, not feature popularity.
+
+Rules:
+
+- Foundation before features.
+- Database before APIs.
+- APIs before UI.
+- Services before AI.
+- AI before automation.
+- Testing throughout the lifecycle.
+
+---
+
+# 3. Phase Overview
+
+```
+Phase 0
+Project Foundation
+
+↓
+
+Phase 1
+Core Infrastructure
+
+↓
+
+Phase 2
+Database
+
+↓
+
+Phase 3
+Backend Services
+
+↓
+
+Phase 4
+Frontend
+
+↓
+
+Phase 5
+AI Layer
+
+↓
+
+Phase 6
+Search & Knowledge
+
+↓
+
+Phase 7
+Quality Assurance
+
+↓
+
+Phase 8
+Deployment
+
+↓
+
+Phase 9
+Future Expansion
+```
+
+---
+
+# Phase 0 — Project Foundation
+
+Objective
+
+Establish the project skeleton.
+
+Deliverables
+
+- Repository initialized
+- Documentation committed
+- Next.js configured
+- TypeScript configured
+- Tailwind configured
+- ESLint configured
+- Prettier configured
+- shadcn/ui installed
+- Environment configuration
+- Path aliases
+- GitHub Actions (optional)
+
+Exit Criteria
+
+✓ Project builds successfully
+
+---
+
+# Phase 1 — Core Infrastructure
+
+Objective
+
+Build reusable infrastructure.
+
+Deliverables
+
+- Configuration system
+- Logging
+- Error handling
+- Validation
+- Utility libraries
+- Authentication foundation (Auth.js v5, see Document 11)
+- Repository pattern
+- Service layer
+- Dependency boundaries
+
+Exit Criteria
+
+✓ Shared infrastructure reusable
+
+---
+
+# Phase 2 — Database
+
+Objective
+
+Implement the persistence layer.
+
+Deliverables
+
+- Prisma schema (per Document 10)
+- Initial migration — includes the `Task` table as a schema placeholder (Core Entity per Document 3), unused by any Service/API/UI until a future phase (Document 13 §6, Amendment 5) <!-- Amended -->
+- Seed script
+- Repository implementations
+- Audit infrastructure
+- Soft-delete support
+- Indexes
+
+Exit Criteria
+
+✓ Database migrations succeed
+
+✓ CRUD validated
+
+---
+
+# Phase 3 — Backend Services
+
+Objective
+
+Implement application services.
+
+Modules
+
+- ProjectService
+- KnowledgeService
+- NotesService
+- DocumentService
+- SearchService
+- GovernanceService
+
+Deliverables
+
+- CRUD
+- Validation
+- Authorization
+- Audit integration
+
+Exit Criteria
+
+✓ Services tested
+
+---
+
+# Phase 4 — Frontend
+
+Objective
+
+Build the application interface.
+
+Pages
+
+- Dashboard
+- Projects
+- Notes
+- Knowledge
+- Documents
+- Search
+- Settings
+
+Deliverables
+
+- Navigation
+- Layout
+- Forms
+- Tables
+- Editors
+- Empty states
+- Loading states
+- Error boundaries
+
+Exit Criteria
+
+✓ Full navigation operational
+
+---
+
+# Phase 5 — AI Layer
+
+Objective
+
+Implement the AI architecture.
+
+Deliverables
+
+- AI Orchestrator
+- Provider interface
+- OpenAI provider
+- Prompt builder
+- Context retrieval (reads via Repository layer — Document 13 §4, Amendment 3)
+- Prompt templates (Document 12)
+- Response validation
+- AI API
+
+Modes
+
+- THINK
+- VALIDATE
+- DOCUMENT
+- IMPLEMENT
+
+Exit Criteria
+
+✓ AI requests execute through Orchestrator only
+
+---
+
+# Phase 6 — Knowledge & Search
+
+Objective
+
+Implement knowledge management.
+
+Deliverables
+
+- Knowledge CRUD
+- Markdown support
+- Relationships
+- Global search (full-text, MVP)
+- Filters
+- Tags (Document 8 §9a)
+- Document linking
+
+Future
+
+- Semantic search
+- Embeddings
+- Knowledge graph
+
+Exit Criteria
+
+✓ Knowledge retrieval operational
+
+---
+
+# Phase 7 — Quality Assurance
+
+Objective
+
+Verify production readiness.
+
+Deliverables
+
+- Unit tests
+- Integration tests
+- End-to-end tests
+- Accessibility review
+- Performance review
+- Security validation
+- Documentation review
+
+Exit Criteria
+
+✓ All critical paths tested
+
+---
+
+# Phase 8 — Deployment
+
+Objective
+
+Prepare production deployment.
+
+Deliverables
+
+- Vercel configuration
+- Environment variables
+- Production database
+- CI/CD
+- Monitoring
+- Error reporting
+
+Exit Criteria
+
+✓ Successful production deployment
+
+---
+
+# Phase 9 — Future Expansion
+
+Reserved capabilities
+
+- Multi-user support (see Document 11 §11)
+- Knowledge Graph
+- Embeddings
+- Vector Search
+- Plugin System
+- Workflow Automation
+- Background Jobs
+- Notifications
+- Analytics
+- Local AI Providers
+
+These features are intentionally excluded from MVP.
+
+---
+
+# 4. Definition of Ready
+
+A feature may begin implementation only if:
+
+- Requirements are documented
+- Architecture approved
+- Database impact identified
+- API contract defined
+- Dependencies resolved
+
+---
+
+# 5. Definition of Done
+
+A feature is complete only if:
+
+✓ Compiles successfully
+
+✓ Passes linting
+
+✓ Passes automated tests
+
+✓ Matches architecture
+
+✓ Matches naming conventions
+
+✓ Uses Service + Repository pattern
+
+✓ Uses AI Orchestrator where applicable
+
+✓ Documentation updated
+
+✓ No undocumented TODOs
+
+---
+
+# 6. Change Management
+
+Any change affecting:
+
+- Architecture
+- Database
+- Folder structure
+- API contracts
+- AI architecture
+
+requires corresponding documentation updates before implementation.
+
+Documentation remains the source of truth.
+
+---
+
+# 7. Implementation Rules
+
+The implementation engineer must:
+
+- Never redesign approved architecture.
+- Never invent missing business rules.
+- Stop and ask when ambiguity exists.
+- Follow dependency order.
+- Keep commits small and atomic.
+- Update documentation alongside implementation.
+
+---
+
+# 8. Git Workflow
+
+Branch naming
+
+```
+feature/<feature-name>
+fix/<issue-name>
+refactor/<module-name>
+docs/<document-name>
+```
+
+Commit messages follow Conventional Commits.
+
+Examples
+
+```
+feat: implement project service
+fix: resolve prisma migration issue
+docs: update ai architecture
+refactor: simplify search service
+```
+
+---
+
+# 9. Final Approval Gate
+
+Implementation may begin only after:
+
+- Documents 1–13 have been ingested. <!-- Amended: was 1-9; Documents 10-13 added per Phase 0 constitutional expansion. -->
+- Conflicts have been resolved.
+- Missing information has been clarified.
+- The project owner issues the command:
+
+```
+START IMPLEMENTATION
+```
+
+Until that command is received:
+
+- No code generation.
+- No scaffolding.
+- No architectural changes.
+
+The implementation engineer should only analyze, validate, and ask questions.
+
+---
+
+END OF DOCUMENT 9

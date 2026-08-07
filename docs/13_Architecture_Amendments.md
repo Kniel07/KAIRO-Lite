@@ -1,8 +1,8 @@
 # KAIRO-Lite
 ## Architecture Amendments
 
-Version: 1.0
-Status: Proposed — **Documents 1–9 remain textually unchanged until each amendment below is explicitly approved.**
+Version: 1.1 (applied)
+Status: Applied — approved by the project owner. Documents 1, 3, 4, 5, 6, and 8 have been updated in place (each now at version 1.1) to reflect every amendment below.
 
 ---
 
@@ -12,7 +12,7 @@ This document is the formal amendment ledger requested after the Phase 0 Ingesti
 
 No amendment here invents a new module, layer, or principle. Every resolution either (a) selects among options the existing documents already implied, (b) fills an explicitly-acknowledged gap with the smallest addition that satisfies existing text, or (c) corrects an internal inconsistency by deferring to the majority/more-specific document.
 
-Per Document 9 §6 (Change Management): these amendments require approval before the affected sections of Documents 1, 4, 5, 6, and 8 are edited in place. Until approved, this document is the authoritative statement of intent; the original documents' text is not modified.
+Per Document 9 §6 (Change Management): these amendments were approved by the project owner and have been applied in place to Documents 1, 3, 4, 5, 6, and 8 (each bumped to version 1.1). Every amended location carries an inline `<!-- Amended -->` marker pointing back to its entry in this document, per Document 9 §6's traceability requirement.
 
 ---
 
@@ -24,7 +24,7 @@ Per Document 9 §6 (Change Management): these amendments require approval before
 
 **Consistency Rationale:** This is not a scope cut invented by this document — it is restoring agreement between the PRD and the three documents (Architecture, Database, API Contracts) that were already internally consistent with each other. MVP full-text search is mechanically supported without new infrastructure: Document 3 §10 already requires "full-text search columns," which Document 10 §8 now concretely assigns as a GIN index on Knowledge (title + markdown). No new module or table is introduced.
 
-**Proposed text change:** Document 1 §9, MVP Scope — replace `Semantic Search` with `Full-Text Search`.
+**Applied text change:** Document 1 §9, MVP Scope — replace `Semantic Search` with `Full-Text Search`.
 
 ---
 
@@ -36,7 +36,7 @@ Per Document 9 §6 (Change Management): these amendments require approval before
 
 **Consistency Rationale:** This adds one folder to a pattern Document 5 already defines per-feature — it does not restructure or rename anything Document 5 specifies. It resolves the Document 7 §8 data-access chain literally, and gives Document 6 §22's Repository naming convention (`ProjectRepository`, `KnowledgeRepository`, etc.) a concrete, singular home.
 
-**Proposed text change:** Document 5 §4 — add `repositories/` to the per-feature folder list. Document 5 §7 — add one line noting `lib/db/` contains shared/cross-cutting repositories.
+**Applied text change:** Document 5 §4 — add `repositories/` to the per-feature folder list. Document 5 §7 — add one line noting `lib/db/` contains shared/cross-cutting repositories.
 
 ---
 
@@ -50,7 +50,7 @@ This is a narrow, explicitly-scoped exception: context retrieval is **read-only*
 
 **Consistency Rationale:** Preserves Document 5 §20's stated chain exactly, using the Repository layer (introduced in Amendment 2) as the shared dependency both `features/` and `ai/` sit above. No circular dependency is created. This directly resolves the Ingestion Report's flagged circular-dependency risk.
 
-**Proposed text change:** Document 4 §3 — add one sentence clarifying context retrieval reads via Repositories, not Services. Document 5 §20 — add one sentence stating `ai/` and `features/` are dependency siblings, both above `lib/`, neither depending on the other except Services → Orchestrator (one direction only).
+**Applied text change:** Document 4 §3 — add one sentence clarifying context retrieval reads via Repositories, not Services. Document 5 §20 — add one sentence stating `ai/` and `features/` are dependency siblings, both above `lib/`, neither depending on the other except Services → Orchestrator (one direction only).
 
 ---
 
@@ -67,7 +67,7 @@ No new API surface is introduced for MVP; `GovernanceRule` is managed through th
 
 **Consistency Rationale:** Every Document 2 responsibility for Governance ("naming conventions, schema validation, knowledge lifecycle, audit policies") is satisfied by mechanisms that already exist elsewhere in the documentation (ESLint/Zod, AuditLog) plus one small table sized to the one concern that actually needs runtime configurability. This avoids inventing a rules-engine that no document ever asked for.
 
-**Proposed text change:** Document 3 §3 (Core Domains) — add `GovernanceRule` to the entity list, noting it is intentionally minimal. No change needed to Document 2 or Document 8.
+**Applied text change:** Document 3 §3 (Core Domains) — add `GovernanceRule` to the entity list, noting it is intentionally minimal. No change needed to Document 2 or Document 8.
 
 ---
 
@@ -79,7 +79,7 @@ No new API surface is introduced for MVP; `GovernanceRule` is managed through th
 
 **Consistency Rationale:** This doesn't resolve the tension by picking one document over the other — it honors both simultaneously: Document 3's *schema* placement (Core Entity) and Document 3's own *scope* label (future) are both true at once, once "in the schema" and "in the product" are recognized as separate questions. No document is contradicted or overridden.
 
-**Proposed text change:** None required — this is a sequencing clarification, not a text conflict. Document 9 Phase 2 deliverables may optionally note "includes Task table, unused until a future phase" for clarity.
+**Applied text change:** None required — this is a sequencing clarification, not a text conflict. Document 9 Phase 2 deliverables may optionally note "includes Task table, unused until a future phase" for clarity.
 
 ---
 
@@ -109,7 +109,7 @@ No new API surface is introduced for MVP; `GovernanceRule` is managed through th
 
 **Consistency Rationale:** Where a document already gave an explicit list (`ProjectStatus`, `AuditOperation`, `AIMode`), that list is used unchanged. Every other enum is a minimal, standard set (Prisma enums can gain members later without a breaking migration), chosen to be the smallest addition that makes the already-named field usable.
 
-**Proposed text change:** Document 6 §10 — note that the `ProjectStatus` example is now the canonical, final value set (not just illustrative).
+**Applied text change:** Document 6 §10 — note that the `ProjectStatus` example is now the canonical, final value set (not just illustrative).
 
 ---
 
@@ -121,7 +121,7 @@ No new API surface is introduced for MVP; `GovernanceRule` is managed through th
 
 **Consistency Rationale:** Document 4 §9 (Response Validation) and Document 4 §13 (Structured Outputs) already frame AI outputs as needing continuous, machine-checkable confidence signals — a float preserves that precision. A closed enum (e.g. `LOW`/`MEDIUM`/`HIGH`) would lose information the AI Orchestrator's validation layer could use, and would still need a UI-layer mapping to bands for display — better to do that mapping once, in the UI, than lose precision at the schema level. This satisfies Document 7 §11's blanket "all external input must be validated" rule directly.
 
-**Proposed text change:** Document 3 §4, Knowledge fields — annotate `confidence` as `Float, 0.0–1.0`.
+**Applied text change:** Document 3 §4, Knowledge fields — annotate `confidence` as `Float, 0.0–1.0`.
 
 ---
 
@@ -133,7 +133,7 @@ No new API surface is introduced for MVP; `GovernanceRule` is managed through th
 
 **Consistency Rationale:** This is field-completion, not a new relationship — Document 3 §5 already asserts the relationship exists; this amendment only supplies the foreign key needed to implement what was already diagrammed.
 
-**Proposed text change:** Document 3 §4, Settings fields — add `userId` to the field list.
+**Applied text change:** Document 3 §4, Settings fields — add `userId` to the field list.
 
 ---
 
@@ -152,7 +152,7 @@ Following exactly the same response envelope, versioning, pagination, and noun-o
 
 **Consistency Rationale:** Purely additive — no existing endpoint, envelope shape, or rule in Document 8 changes. It fills an omission using Document 8's own established pattern.
 
-**Proposed text change:** Document 8 — new §9a "Tags API," inserted after §9 (Projects API), matching the existing section format.
+**Applied text change:** Document 8 — new §9a "Tags API," inserted after §9 (Projects API), matching the existing section format.
 
 ---
 
@@ -170,7 +170,7 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 
 **Consistency Rationale:** This is a retrieval-only addition; it does not create a second way to produce AI output, so it cannot weaken the "Orchestrator is the only gateway" rule (Document 4 §15) that Document 4 treats as non-negotiable.
 
-**Proposed text change:** Document 8 — new §14a "Conversations API," inserted after §14 (AI API).
+**Applied text change:** Document 8 — new §14a "Conversations API," inserted after §14 (AI API).
 
 ---
 
@@ -184,19 +184,19 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 
 | # | Topic | Affected Document(s) | Status |
 |---|---|---|---|
-| 1 | Semantic Search scope | Doc 1 §9 | Proposed |
-| 2 | Repository location | Doc 5 §4, §7 | Proposed |
-| 3 | AI Orchestrator dependency direction | Doc 4 §3, Doc 5 §20 | Proposed |
-| 4 | Governance implementation | Doc 3 §3 | Proposed |
+| 1 | Semantic Search scope | Doc 1 §9 | Applied |
+| 2 | Repository location | Doc 5 §4, §7 | Applied |
+| 3 | AI Orchestrator dependency direction | Doc 4 §3, Doc 5 §20 | Applied |
+| 4 | Governance implementation | Doc 3 §3 | Applied |
 | 5 | Task entity status | None (clarification only) | Confirmed |
-| 6 | Enum definitions | Doc 6 §10 | Proposed |
-| 7 | Knowledge confidence type | Doc 3 §4 | Proposed |
-| 8 | Settings ownership | Doc 3 §4 | Proposed |
-| 9 | Tags API | Doc 8 (new §9a) | Proposed |
-| 10 | Conversations API | Doc 8 (new §14a) | Proposed |
+| 6 | Enum definitions | Doc 6 §10 | Applied |
+| 7 | Knowledge confidence type | Doc 3 §4 | Applied |
+| 8 | Settings ownership | Doc 3 §4 | Applied |
+| 9 | Tags API | Doc 8 (new §9a) | Applied |
+| 10 | Conversations API | Doc 8 (new §14a) | Applied |
 | 11 | `ReviewPrompt` naming | None (clarification only) | Confirmed |
 
-All "Proposed" items require your explicit approval before I edit Documents 1, 3, 4, 5, 6, or 8 in place. Until then, Documents 10–13 stand as the authoritative resolution and Documents 1–9's original text is unchanged.
+All items are now Applied. Documents 1, 3, 4, 5, 6, and 8 have been edited in place (version 1.1 each, with inline `<!-- Amended -->` markers), and Document 9's Final Approval Gate (§9) now references Documents 1–13. The full constitution (Documents 1–13) is internally consistent as of this revision.
 
 ---
 
