@@ -98,7 +98,7 @@ export function SearchView() {
                   </span>
                 </div>
                 <Link
-                  href={ROUTES.knowledge}
+                  href={`${ROUTES.knowledge}?open=${result.id}`}
                   className="mt-2 inline-block text-sm text-primary hover:underline"
                 >
                   Open in Knowledge →

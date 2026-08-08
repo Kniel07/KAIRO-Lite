@@ -2,9 +2,10 @@
 
 import { useTheme } from "next-themes";
 import { signOut, useSession } from "next-auth/react";
-import { Moon, Sun, LogOut } from "lucide-react";
+import { Moon, Sun, LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/constants/routes";
+import { useSidebar } from "@/components/navigation/SidebarContext";
 
 // Document 9 Phase 4 deliverable: "Layout." A consistent top bar across
 // every authenticated page — who's signed in, a theme toggle (Document 10
@@ -13,10 +14,22 @@ import { ROUTES } from "@/constants/routes";
 export function Header() {
   const { data: session } = useSession();
   const { resolvedTheme, setTheme } = useTheme();
+  const { toggle } = useSidebar();
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border px-6">
-      <span className="text-sm text-muted-foreground">{session?.user?.email}</span>
+    <header className="flex h-14 items-center justify-between border-b border-border px-4 md:px-6">
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="Toggle navigation"
+          className="md:hidden"
+          onClick={toggle}
+        >
+          <Menu className="h-4 w-4" />
+        </Button>
+        <span className="text-sm text-muted-foreground">{session?.user?.email}</span>
+      </div>
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"

@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Implementation Plan
 
-Version: 1.2 (amended)
+Version: 1.3 (amended)
 Status: Approved
 
 ---
@@ -218,9 +218,11 @@ Deliverables
 
 Route Handlers (`app/api/v1/**`) were built alongside the pages — Document 8's contract, one Service call per handler, standard envelope — since Components consume Route Handlers only (Document 7 §8), never a Service directly (enforced by the pre-Phase-4 ESLint boundary, Document 13 §21 Amendment 19).
 
+A read-only Pre-Phase-5 UX Review (before Phase 5 was authorized) found that the shared application shell (`app/(dashboard)/layout.tsx`) only wrapped the Dashboard route — every other page lived outside the `(dashboard)` route group and rendered with no sidebar, header, or skip link. Phase 4 was reopened rather than closed on the original verification pass; Document 13 §23 Amendment 21 records the correction (route group fix, responsive sidebar, `ConfirmDialog` replacing `window.confirm()`, Search result deep-linking, Project cross-navigation, truncation notice, Documents table consistency, required-field indicators) and the re-verification that followed. <!-- Amended -->
+
 Exit Criteria
 
-✓ Full navigation operational — verified in a real browser session (session-cookie auth, not the magic-link flow, since no real email delivery exists in this environment): every page loaded, and the full workflow (create/edit/archive a Project, create a Note and convert it to both Knowledge and a Document, create Knowledge directly with the Markdown editor's live preview, create and publish a Document, run a real full-text Search that returned ranked results, save Settings) completed with no console or page errors. Test data and the manual session were removed afterward.
+✓ Full navigation operational — every page (Dashboard, Projects, Notes, Knowledge, Documents, Search, Settings, AI Workspace) is nested under `app/(dashboard)/` and renders the shared sidebar, header, and skip link; verified in a real browser session (session-cookie auth, not the magic-link flow, since no real email delivery exists in this environment) across all eight routes, plus a mobile-viewport pass confirming the off-canvas sidebar opens/closes correctly and a keyboard-only pass confirming the skip link is the first Tab stop. The original create/edit/archive/convert/publish/search/settings workflow was re-run end-to-end with no console or page errors. Test data and the manual session were removed afterward. <!-- Amended -->
 
 ---
 

@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { RequiredMark } from "@/components/ui/required-mark";
 import { MarkdownEditor } from "@/components/editors/MarkdownEditor";
 import { Spinner } from "@/components/feedback/Spinner";
 
@@ -50,8 +51,14 @@ export function DocumentForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+      <p className="text-xs text-muted-foreground">
+        Fields marked <span className="text-destructive">*</span> are required.
+      </p>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="document-title">Title</Label>
+        <Label htmlFor="document-title">
+          Title
+          <RequiredMark />
+        </Label>
         <Input id="document-title" {...register("title")} autoFocus />
         {errors.title ? (
           <p role="alert" className="text-sm text-destructive">
@@ -62,7 +69,10 @@ export function DocumentForm({
 
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="document-project">Project</Label>
+          <Label htmlFor="document-project">
+            Project
+            <RequiredMark />
+          </Label>
           <Select id="document-project" {...register("projectId")} disabled={projects.isPending}>
             {projects.data?.items.map((project) => (
               <option key={project.id} value={project.id}>
@@ -89,7 +99,10 @@ export function DocumentForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="document-markdown">Content</Label>
+        <Label htmlFor="document-markdown">
+          Content
+          <RequiredMark />
+        </Label>
         <Controller
           name="markdown"
           control={control}

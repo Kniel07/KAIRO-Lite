@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Archive, Pencil } from "lucide-react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Plus, Archive, Pencil, X } from "lucide-react";
 import {
   useArchiveKnowledge,
   useCreateKnowledge,
@@ -17,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
+import { TruncationNotice } from "@/components/feedback/TruncationNotice";
 import {
   Dialog,
   DialogCloseButton,
@@ -24,6 +27,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ROUTES } from "@/constants/routes";
 import type { Knowledge } from "@/types/database";
 
 function EditKnowledgeDialog({
@@ -73,19 +78,41 @@ function EditKnowledgeDialog({
 }
 
 export function KnowledgeView() {
-  const knowledge = useKnowledgeList();
+  const searchParams = useSearchParams();
+  const projectFilter = searchParams.get("projectId");
+  const knowledge = useKnowledgeList(projectFilter ?? undefined);
   const createKnowledge = useCreateKnowledge();
   const archiveKnowledge = useArchiveKnowledge();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingKnowledge, setEditingKnowledge] = useState<Knowledge | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<{ id: string; title: string } | null>(null);
+  const router = useRouter();
+
+  // UX correction (Pre-Phase-5 Review, Priority 4): Search results deep-link
+  // here via `?open=<id>` instead of dropping the user on the bare list —
+  // opens that item's existing edit dialog, then strips the param so it
+  // doesn't re-trigger on later list refetches.
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId || !knowledge.data) return;
+    const match = knowledge.data.items.find((item) => item.id === openId);
+    if (match) {
+      setEditingKnowledge(match);
+      router.replace(ROUTES.knowledge);
+    }
+  }, [searchParams, knowledge.data, router]);
 
   function handleCreate(values: KnowledgeFormValues) {
     createKnowledge.mutate(values, { onSuccess: () => setIsCreateOpen(false) });
   }
 
   function handleArchive(id: string, title: string) {
-    if (!window.confirm(`Archive "${title}"?`)) return;
-    archiveKnowledge.mutate(id);
+    setArchiveTarget({ id, title });
+  }
+
+  function confirmArchive() {
+    if (!archiveTarget) return;
+    archiveKnowledge.mutate(archiveTarget.id, { onSuccess: () => setArchiveTarget(null) });
   }
 
   return (
@@ -101,6 +128,16 @@ export function KnowledgeView() {
         </Button>
       </div>
 
+      {projectFilter ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          Filtered to knowledge from one project.
+          <Link href={ROUTES.knowledge} className="inline-flex items-center gap-1 underline">
+            <X className="h-3 w-3" />
+            Clear filter
+          </Link>
+        </div>
+      ) : null}
+
       {knowledge.isPending ? (
         <div className="flex flex-col gap-2">
           <Skeleton className="h-12 w-full" />
@@ -110,7 +147,7 @@ export function KnowledgeView() {
         <ErrorState message="Couldn't load knowledge." onRetry={() => void knowledge.refetch()} />
       ) : knowledge.data.items.length === 0 ? (
         <EmptyState
-          title="No knowledge yet"
+          title={projectFilter ? "No knowledge for this project" : "No knowledge yet"}
           description="Add your first entry, or convert an existing Note into Knowledge from the Notes page."
           action={
             <Button size="sm" onClick={() => setIsCreateOpen(true)}>
@@ -179,6 +216,13 @@ export function KnowledgeView() {
         </div>
       )}
 
+      {knowledge.data ? (
+        <TruncationNotice
+          shown={knowledge.data.items.length}
+          total={knowledge.data.meta?.total ?? knowledge.data.items.length}
+        />
+      ) : null}
+
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen} className="max-w-2xl">
         <DialogContent>
           <DialogCloseButton onClick={() => setIsCreateOpen(false)} />
@@ -205,6 +249,15 @@ export function KnowledgeView() {
           onOpenChange={(open) => !open && setEditingKnowledge(null)}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={archiveTarget !== null}
+        onOpenChange={(open) => !open && setArchiveTarget(null)}
+        title={`Archive "${archiveTarget?.title}"?`}
+        confirmLabel="Archive"
+        onConfirm={confirmArchive}
+        isConfirming={archiveKnowledge.isPending}
+      />
     </div>
   );
 }

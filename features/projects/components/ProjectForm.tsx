@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { RequiredMark } from "@/components/ui/required-mark";
 import { Spinner } from "@/components/feedback/Spinner";
 
 // `createProjectSchema` covers both create and edit — `updateProjectSchema`
@@ -48,8 +49,14 @@ export function ProjectForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+      <p className="text-xs text-muted-foreground">
+        Fields marked <span className="text-destructive">*</span> are required.
+      </p>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="project-name">Name</Label>
+        <Label htmlFor="project-name">
+          Name
+          <RequiredMark />
+        </Label>
         <Input
           id="project-name"
           {...register("name")}

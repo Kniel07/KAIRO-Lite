@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { RequiredMark } from "@/components/ui/required-mark";
 import { MarkdownEditor } from "@/components/editors/MarkdownEditor";
 import { Spinner } from "@/components/feedback/Spinner";
 
@@ -50,8 +51,14 @@ export function KnowledgeForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+      <p className="text-xs text-muted-foreground">
+        Fields marked <span className="text-destructive">*</span> are required.
+      </p>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="knowledge-title">Title</Label>
+        <Label htmlFor="knowledge-title">
+          Title
+          <RequiredMark />
+        </Label>
         <Input id="knowledge-title" {...register("title")} autoFocus />
         {errors.title ? (
           <p role="alert" className="text-sm text-destructive">
@@ -67,7 +74,10 @@ export function KnowledgeForm({
 
       <div className="grid grid-cols-3 gap-3">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="knowledge-category">Category</Label>
+          <Label htmlFor="knowledge-category">
+            Category
+            <RequiredMark />
+          </Label>
           <Input id="knowledge-category" {...register("category")} placeholder="e.g. engineering" />
           {errors.category ? (
             <p role="alert" className="text-sm text-destructive">
@@ -103,7 +113,10 @@ export function KnowledgeForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="knowledge-markdown">Content</Label>
+        <Label htmlFor="knowledge-markdown">
+          Content
+          <RequiredMark />
+        </Label>
         <Controller
           name="markdown"
           control={control}

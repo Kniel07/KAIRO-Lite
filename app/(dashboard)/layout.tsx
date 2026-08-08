@@ -10,7 +10,8 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { ROUTES } from "@/constants/routes";
-import { NavLink } from "@/components/navigation/NavLink";
+import { Sidebar } from "@/components/navigation/Sidebar";
+import { SidebarProvider } from "@/components/navigation/SidebarContext";
 import { Header } from "@/components/layout/Header";
 
 // Document 5 §3 — application shell (Document 9 Phase 4: "Navigation",
@@ -66,27 +67,22 @@ const NAV_ITEMS: { href: string; label: string; icon: ReactNode }[] = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen">
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:bg-background focus:p-2 focus:shadow-lg"
-      >
-        Skip to main content
-      </a>
-      <aside className="w-56 shrink-0 border-r border-border p-4">
-        <div className="mb-6 text-lg font-semibold">KAIRO-Lite</div>
-        <nav aria-label="Main navigation" className="flex flex-col gap-1">
-          {NAV_ITEMS.map((item) => (
-            <NavLink key={item.href} href={item.href} label={item.label} icon={item.icon} />
-          ))}
-        </nav>
-      </aside>
-      <div className="flex flex-1 flex-col">
-        <Header />
-        <main id="main-content" className="flex flex-1 flex-col">
-          {children}
-        </main>
+    <SidebarProvider>
+      <div className="flex min-h-screen">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:bg-background focus:p-2 focus:shadow-lg"
+        >
+          Skip to main content
+        </a>
+        <Sidebar items={NAV_ITEMS} />
+        <div className="flex flex-1 flex-col">
+          <Header />
+          <main id="main-content" className="flex flex-1 flex-col">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }

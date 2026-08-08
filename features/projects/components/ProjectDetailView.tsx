@@ -2,16 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Archive } from "lucide-react";
+import { ArrowLeft, Archive, StickyNote, BookOpen, FileText } from "lucide-react";
 import {
   useArchiveProject,
   useProject,
   useUpdateProject,
 } from "@/features/projects/hooks/useProjects";
 import { ProjectForm, type ProjectFormValues } from "@/features/projects/components/ProjectForm";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/feedback/ErrorState";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ROUTES } from "@/constants/routes";
 
 export function ProjectDetailView({ id }: { id: string }) {
@@ -19,14 +21,13 @@ export function ProjectDetailView({ id }: { id: string }) {
   const project = useProject(id);
   const updateProject = useUpdateProject(id);
   const archiveProject = useArchiveProject();
+  const [isConfirmingArchive, setIsConfirmingArchive] = useState(false);
 
   function handleUpdate(values: ProjectFormValues) {
     updateProject.mutate(values);
   }
 
-  function handleArchive() {
-    if (!project.data) return;
-    if (!window.confirm(`Archive "${project.data.name}"?`)) return;
+  function confirmArchive() {
     archiveProject.mutate(id, { onSuccess: () => router.push(ROUTES.projects) });
   }
 
@@ -51,10 +52,38 @@ export function ProjectDetailView({ id }: { id: string }) {
         <div className="flex max-w-lg flex-col gap-6">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-semibold">{project.data.name}</h1>
-            <Button variant="outline" size="sm" onClick={handleArchive}>
+            <Button variant="outline" size="sm" onClick={() => setIsConfirmingArchive(true)}>
               <Archive className="mr-2 h-4 w-4" />
               Archive
             </Button>
+          </div>
+
+          {/* UX correction (Pre-Phase-5 Review, Priority 5): a Project is
+              the organizing entity for Notes, Knowledge, and Documents —
+              this page previously had no way to reach any of them scoped
+              to this project. */}
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`${ROUTES.notes}?projectId=${project.data.id}`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+            >
+              <StickyNote className="h-4 w-4" />
+              Notes
+            </Link>
+            <Link
+              href={`${ROUTES.knowledge}?projectId=${project.data.id}`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+            >
+              <BookOpen className="h-4 w-4" />
+              Knowledge
+            </Link>
+            <Link
+              href={`${ROUTES.documents}?projectId=${project.data.id}`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+            >
+              <FileText className="h-4 w-4" />
+              Documents
+            </Link>
           </div>
 
           <ProjectForm
@@ -81,6 +110,17 @@ export function ProjectDetailView({ id }: { id: string }) {
           ) : null}
         </div>
       )}
+
+      {project.data ? (
+        <ConfirmDialog
+          open={isConfirmingArchive}
+          onOpenChange={setIsConfirmingArchive}
+          title={`Archive "${project.data.name}"?`}
+          confirmLabel="Archive"
+          onConfirm={confirmArchive}
+          isConfirming={archiveProject.isPending}
+        />
+      ) : null}
     </div>
   );
 }

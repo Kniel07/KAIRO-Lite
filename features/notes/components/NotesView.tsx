@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Archive, Pencil, Sparkles, FileOutput } from "lucide-react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Plus, Archive, Pencil, Sparkles, FileOutput, X } from "lucide-react";
 import {
   useArchiveNote,
   useCreateNote,
@@ -16,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
+import { TruncationNotice } from "@/components/feedback/TruncationNotice";
 import {
   Dialog,
   DialogCloseButton,
@@ -23,6 +26,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ROUTES } from "@/constants/routes";
 import type { Note } from "@/types/database";
 
 function EditNoteDialog({
@@ -77,14 +82,31 @@ export function NotesView() {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [convertToKnowledgeId, setConvertToKnowledgeId] = useState<string | null>(null);
   const [convertToDocumentId, setConvertToDocumentId] = useState<string | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<{ id: string; title: string } | null>(null);
+  const searchParams = useSearchParams();
+  const projectFilter = searchParams.get("projectId");
+
+  // UX correction (Pre-Phase-5 Review, Priority 5): the Notes API has no
+  // server-side project filter, so this filters the already-fetched list
+  // client-side rather than adding a new query parameter to the Route
+  // Handler/Service/Repository chain — no backend change.
+  const filteredItems = useMemo(() => {
+    if (!notes.data) return undefined;
+    if (!projectFilter) return notes.data.items;
+    return notes.data.items.filter((note) => note.projectId === projectFilter);
+  }, [notes.data, projectFilter]);
 
   function handleCreate(values: NoteFormValues) {
     createNote.mutate(values, { onSuccess: () => setIsCreateOpen(false) });
   }
 
   function handleArchive(id: string, title: string) {
-    if (!window.confirm(`Archive "${title}"?`)) return;
-    archiveNote.mutate(id);
+    setArchiveTarget({ id, title });
+  }
+
+  function confirmArchive() {
+    if (!archiveTarget) return;
+    archiveNote.mutate(archiveTarget.id, { onSuccess: () => setArchiveTarget(null) });
   }
 
   return (
@@ -102,6 +124,16 @@ export function NotesView() {
         </Button>
       </div>
 
+      {projectFilter ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          Filtered to notes from one project.
+          <Link href={ROUTES.notes} className="inline-flex items-center gap-1 underline">
+            <X className="h-3 w-3" />
+            Clear filter
+          </Link>
+        </div>
+      ) : null}
+
       {notes.isPending ? (
         <div className="flex flex-col gap-2">
           <Skeleton className="h-12 w-full" />
@@ -109,9 +141,9 @@ export function NotesView() {
         </div>
       ) : notes.isError ? (
         <ErrorState message="Couldn't load notes." onRetry={() => void notes.refetch()} />
-      ) : notes.data.items.length === 0 ? (
+      ) : !filteredItems || filteredItems.length === 0 ? (
         <EmptyState
-          title="No notes yet"
+          title={projectFilter ? "No notes for this project" : "No notes yet"}
           description="Capture a quick idea, reference, or journal entry — convert it into Knowledge or a Document later."
           action={
             <Button size="sm" onClick={() => setIsCreateOpen(true)}>
@@ -140,7 +172,7 @@ export function NotesView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {notes.data.items.map((note) => (
+              {filteredItems.map((note) => (
                 <tr key={note.id} className="hover:bg-accent/30">
                   <td className="max-w-xs truncate px-4 py-3 font-medium">{note.title}</td>
                   <td className="px-4 py-3">
@@ -190,6 +222,13 @@ export function NotesView() {
         </div>
       )}
 
+      {notes.data && !projectFilter ? (
+        <TruncationNotice
+          shown={notes.data.items.length}
+          total={notes.data.meta?.total ?? notes.data.items.length}
+        />
+      ) : null}
+
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent>
           <DialogCloseButton onClick={() => setIsCreateOpen(false)} />
@@ -232,6 +271,15 @@ export function NotesView() {
           onOpenChange={(open) => !open && setConvertToDocumentId(null)}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={archiveTarget !== null}
+        onOpenChange={(open) => !open && setArchiveTarget(null)}
+        title={`Archive "${archiveTarget?.title}"?`}
+        confirmLabel="Archive"
+        onConfirm={confirmArchive}
+        isConfirming={archiveNote.isPending}
+      />
     </div>
   );
 }

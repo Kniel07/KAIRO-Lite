@@ -15,7 +15,17 @@ import { cn } from "@/lib/utils";
 // Client Component across the server/client boundary (React can't
 // serialize a function reference), but an already-resolved element is a
 // plain serializable object.
-export function NavLink({ href, label, icon }: { href: string; label: string; icon: ReactNode }) {
+export function NavLink({
+  href,
+  label,
+  icon,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  icon: ReactNode;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const isActive = href === "/" ? pathname === href : pathname.startsWith(href);
 
@@ -23,6 +33,7 @@ export function NavLink({ href, label, icon }: { href: string; label: string; ic
     <Link
       href={href}
       aria-current={isActive ? "page" : undefined}
+      onClick={onNavigate}
       className={cn(
         "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
         isActive

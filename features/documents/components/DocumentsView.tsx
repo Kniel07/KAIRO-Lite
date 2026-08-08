@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Plus, Archive, Pencil, Eye, EyeOff } from "lucide-react";
 import { useProjects } from "@/features/projects/hooks/useProjects";
 import {
@@ -24,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
+import { TruncationNotice } from "@/components/feedback/TruncationNotice";
 import {
   Dialog,
   DialogCloseButton,
@@ -31,6 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ROUTES } from "@/constants/routes";
 import type { KairoDocument } from "@/types/database";
 
@@ -78,7 +81,11 @@ function EditDocumentDialog({
 
 export function DocumentsView() {
   const projects = useProjects();
-  const [projectId, setProjectId] = useState<string>("");
+  const searchParams = useSearchParams();
+  // UX correction (Pre-Phase-5 Review, Priority 5): arriving from a
+  // Project's cross-navigation link preselects that project instead of
+  // defaulting to the first one in the list.
+  const [projectId, setProjectId] = useState<string>(() => searchParams.get("projectId") ?? "");
 
   useEffect(() => {
     const firstProject = projects.data?.items[0];
@@ -93,14 +100,19 @@ export function DocumentsView() {
   const setPublished = useSetDocumentPublished();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingDocument, setEditingDocument] = useState<KairoDocument | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<{ id: string; title: string } | null>(null);
 
   function handleCreate(values: DocumentFormValues) {
     createDocument.mutate(values, { onSuccess: () => setIsCreateOpen(false) });
   }
 
   function handleArchive(id: string, title: string) {
-    if (!window.confirm(`Archive "${title}"?`)) return;
-    archiveDocument.mutate(id);
+    setArchiveTarget({ id, title });
+  }
+
+  function confirmArchive() {
+    if (!archiveTarget) return;
+    archiveDocument.mutate(archiveTarget.id, { onSuccess: () => setArchiveTarget(null) });
   }
 
   return (
@@ -192,7 +204,9 @@ export function DocumentsView() {
                 {documents.data.items.map((document) => (
                   <tr key={document.id} className="hover:bg-accent/30">
                     <td className="max-w-xs truncate px-4 py-3 font-medium">{document.title}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{document.type}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant="outline">{document.type}</Badge>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">v{document.version}</td>
                     <td className="px-4 py-3">
                       <Badge variant={document.published ? "default" : "secondary"}>
@@ -245,6 +259,13 @@ export function DocumentsView() {
         )
       ) : null}
 
+      {documents.data ? (
+        <TruncationNotice
+          shown={documents.data.items.length}
+          total={documents.data.meta?.total ?? documents.data.items.length}
+        />
+      ) : null}
+
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen} className="max-w-2xl">
         <DialogContent>
           <DialogCloseButton onClick={() => setIsCreateOpen(false)} />
@@ -272,6 +293,15 @@ export function DocumentsView() {
           onOpenChange={(open) => !open && setEditingDocument(null)}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={archiveTarget !== null}
+        onOpenChange={(open) => !open && setArchiveTarget(null)}
+        title={`Archive "${archiveTarget?.title}"?`}
+        confirmLabel="Archive"
+        onConfirm={confirmArchive}
+        isConfirming={archiveDocument.isPending}
+      />
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
+import { TruncationNotice } from "@/components/feedback/TruncationNotice";
 import {
   Dialog,
   DialogCloseButton,
@@ -21,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ROUTES } from "@/constants/routes";
 
 // Document 9 Phase 4 — Projects: list (table), create (dialog + form),
@@ -30,6 +32,7 @@ export function ProjectsView() {
   const createProject = useCreateProject();
   const archiveProject = useArchiveProject();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<{ id: string; name: string } | null>(null);
 
   function handleCreate(values: ProjectFormValues) {
     createProject.mutate(values, {
@@ -38,14 +41,12 @@ export function ProjectsView() {
   }
 
   function handleArchive(id: string, name: string) {
-    if (
-      !window.confirm(
-        `Archive "${name}"? You can find it later via the database, but there's no restore view yet.`,
-      )
-    ) {
-      return;
-    }
-    archiveProject.mutate(id);
+    setArchiveTarget({ id, name });
+  }
+
+  function confirmArchive() {
+    if (!archiveTarget) return;
+    archiveProject.mutate(archiveTarget.id, { onSuccess: () => setArchiveTarget(null) });
   }
 
   return (
@@ -137,6 +138,13 @@ export function ProjectsView() {
         </div>
       )}
 
+      {projects.data ? (
+        <TruncationNotice
+          shown={projects.data.items.length}
+          total={projects.data.meta?.total ?? projects.data.items.length}
+        />
+      ) : null}
+
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent>
           <DialogCloseButton onClick={() => setIsCreateOpen(false)} />
@@ -155,6 +163,16 @@ export function ProjectsView() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={archiveTarget !== null}
+        onOpenChange={(open) => !open && setArchiveTarget(null)}
+        title={`Archive "${archiveTarget?.name}"?`}
+        description="You can find it later via the database, but there's no restore view yet."
+        confirmLabel="Archive"
+        onConfirm={confirmArchive}
+        isConfirming={archiveProject.isPending}
+      />
     </div>
   );
 }

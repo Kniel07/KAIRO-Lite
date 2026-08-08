@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Architecture Amendments
 
-Version: 1.6 (applied)
+Version: 1.7 (applied)
 Status: Applied — approved by the project owner. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been updated in place to reflect every amendment below.
 
 ---
@@ -313,7 +313,27 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 
 ---
 
-# 23. Amendment Ledger Summary
+# 23. Amendment 21 — Phase 4 UX Corrections (Pre-Phase-5 Review)
+
+**Problem:** A read-only UX review conducted before authorizing Phase 5 found that Document 9's Phase 4 exit criterion — "Full navigation operational" — was not actually met. `app/(dashboard)/layout.tsx` defines the shared shell (sidebar, header, skip link, error boundary), but only `app/(dashboard)/page.tsx` (the Dashboard, `/`) was physically nested inside that route group; `app/projects`, `app/notes`, `app/knowledge`, `app/documents`, `app/search`, `app/settings`, and `app/ai` were sibling top-level directories that never inherited it. Every page except the Dashboard rendered with no sidebar, no header, and no way to reach any other section except the browser back button. The review also found six smaller but genuine defects: no responsive sidebar behavior, `window.confirm()` used for archive actions instead of the app's own `Dialog` system, Search results linking to the generic Knowledge list instead of the specific matched item, no cross-navigation from a Project to its scoped Notes/Knowledge/Documents, silent truncation past the 100-item fetch cap, inconsistent Type/Status treatment in the Documents table, and no required-field indicators on forms. The project owner reopened Phase 4 rather than authorizing Phase 5, and authorized these eight corrections in a fixed priority order, explicitly scoped to UI/Route Handler changes only — no Service, Repository, or architectural changes, no AI work.
+
+**Chosen Solution (in the authorized priority order):**
+1. **Route group fix:** moved all seven pages (plus `app/projects/[id]`) into `app/(dashboard)/` via `git mv` — a file relocation, not a redesign. Verified via a fresh Chromium session that every route now renders the sidebar and header, and via `npm run build` that all 25 routes still generate correctly.
+2. **Responsive sidebar:** added `components/navigation/SidebarContext.tsx` (a small React Context for open/close state, Component-layer only) and `components/navigation/Sidebar.tsx` (off-canvas below `md`, static above it), with a hamburger toggle added to `Header.tsx`. `NavLink` gained an `onNavigate` callback so clicking a link closes the mobile sidebar.
+3. **`ConfirmDialog`:** `components/ui/confirm-dialog.tsx`, built on the existing `Dialog` primitive (same one every create/edit flow already uses), replacing all five `window.confirm()` call sites (`ProjectsView`, `ProjectDetailView`, `NotesView`, `KnowledgeView`, `DocumentsView`). Added a `destructive` variant to `components/ui/button.tsx` (the `--destructive` CSS token already existed; only `default`/`outline`/`ghost` variants existed on the Button component itself).
+4. **Search result routing:** `SearchService.searchKnowledge` only ever returns Knowledge entries (Document 13 §2, Amendment 1 — Search is Knowledge-only, not a review error, confirmed against `SearchRepository`/`SearchService`), so "route by resource type" reduces to "link to the specific Knowledge item" rather than a Note/Knowledge/Document dispatch. Search results now link to `/knowledge?open=<id>`; `KnowledgeView` reads that param and opens the existing `EditKnowledgeDialog` for the matched item, then strips the param via `router.replace`. No new detail route was added.
+5. **Project cross-navigation:** `ProjectDetailView` gained three links to `/notes?projectId=<id>`, `/knowledge?projectId=<id>`, `/documents?projectId=<id>`. `KnowledgeView` already supported a server-side `projectId` filter (`useKnowledgeList(projectId)`); `DocumentsView` now seeds its existing project-selector state from the URL param instead of defaulting to the first project; `NotesView` filters its already-fetched list client-side by `projectId`, since the Notes API has no server-side project filter and adding one was out of scope ("no Service/Repository changes unless absolutely required").
+6. **Truncation notice:** `components/feedback/TruncationNotice.tsx`, shown on Projects/Notes/Knowledge/Documents whenever `meta.total` exceeds the fetched `pageSize=100` — using `meta` every list hook already returns. A full pager was explicitly out of scope.
+7. **Documents table consistency:** the `Type` column now renders as a `Badge` (`variant="outline"`) instead of plain text, matching the existing `Status` badge in the same row.
+8. **Required-field indicators:** `components/ui/required-mark.tsx`, plus a "Fields marked * are required" legend, added to every schema-required field (no `.optional()`) across `ProjectForm`, `NoteForm`, `KnowledgeForm`, and `DocumentForm` (the create form only — `DocumentEditForm`'s schema is `.partial()`, so it has no required fields).
+
+**Consistency Rationale:** Every change stays inside the Component/Route Handler layer the Phase 4 UX review was scoped to. No Service, Repository, or Prisma code changed; no new UI-library dependency was added (the confirm dialog and sidebar both reuse existing primitives/patterns); the Search fix corrected a factual error in the original review's premise (it assumed Search could return Notes/Documents, which the architecture never allowed) rather than inventing new search-routing logic.
+
+**Applied text change:** Document 9, Phase 4 — Exit Criteria rewritten to describe the corrected navigation behavior and to note the review-then-correction cycle, since "Full navigation operational" is now genuinely true rather than true-on-one-route.
+
+---
+
+# 24. Amendment Ledger Summary
 
 | # | Topic | Affected Document(s) | Status |
 |---|---|---|---|
@@ -338,8 +358,9 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 | 18 | Phase 3 backend services architecture (transaction boundaries, governance read path, note conversion) | Doc 7 §8, Doc 9 Phase 3 | Applied |
 | 19 | Component/page → Service boundary enforcement | Doc 7 §8 (enforcement only, no text change) | Applied |
 | 20 | Phase 4 frontend architecture (SettingsService gap-fill, client data fetching, no new UI dependencies, MarkdownEditor reuse) | Doc 8 §15, Doc 9 Phase 4 | Applied |
+| 21 | Phase 4 UX corrections (route group fix, responsive sidebar, ConfirmDialog, Search result routing, Project cross-navigation, truncation notice, Documents table consistency, required-field indicators) | Doc 9 Phase 4 | Applied |
 
-All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint; Amendment 18 originated from the Phase 3 implementation itself; Amendment 19 originated from the Document 14 Revision 3 pre-Phase-4 audit; Amendment 20 originated from the Phase 4 implementation itself. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
+All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint; Amendment 18 originated from the Phase 3 implementation itself; Amendment 19 originated from the Document 14 Revision 3 pre-Phase-4 audit; Amendment 20 originated from the Phase 4 implementation itself; Amendment 21 originated from the read-only Pre-Phase-5 UX Review, which found Phase 4's "Full navigation operational" exit criterion was not actually met and reopened Phase 4 for correction before Phase 5 was authorized. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
 
 ---
 
