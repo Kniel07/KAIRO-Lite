@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Architecture Amendments
 
-Version: 1.8 (applied)
+Version: 1.9 (applied)
 Status: Applied — approved by the project owner. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been updated in place to reflect every amendment below.
 
 ---
@@ -366,7 +366,24 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 
 ---
 
-# 26. Amendment Ledger Summary
+# 26. Amendment 24 — Phase 5.5 AI Stabilization
+
+**Problem:** A read-only Pre-Phase-6 AI Architecture Review (requested before authorizing Knowledge Intelligence work) audited the Phase 5 implementation against its own stated intent rather than its existence, and found five behavioral gaps — none architectural, all inside behavior the architecture already allowed: (1) `Settings.defaultModel`/`aiTemperature` (Document 10 §5.11) were fetched into context and described in the prompt as text, but never actually passed to `provider.chat()` — the Settings page promised AI-behavior control it didn't deliver; (2) explicit `knowledgeIds` ("Active Document," Doc 4 §6 priority 2) skipped the project-ownership check every other Knowledge read path enforces (`KnowledgeService.assertAccess`, Phase 3); (3) a successful, schema-validated AI response was discarded if the subsequent `AIChatService.recordTurn()` persistence call failed, forcing the caller to regenerate (and re-pay for) an answer that had already succeeded; (4) `approved: true` alone was trusted to unlock IMPLEMENT Stage 2, with nothing verifying a real Stage 1 plan had ever been produced — weakening Document 4 §1's "Human approval always overrides AI suggestions" to a bare boolean; (5) a real OpenAI rate limit (429) surfaced as the same generic `AI_PROVIDER_ERROR` as every other provider failure, even though `RateLimitedError`/`RATE_LIMITED` (Document 8 §18) already existed unused.
+
+**Chosen Solution:**
+- **Settings applied to the provider call:** `AIOrchestrator.execute()` now passes `context.userPreferences?.defaultModel`/`aiTemperature` into `provider.chat()`, falling through to `OpenAIProvider`'s own `aiConfig` defaults when no Settings row exists or a field is unset. `PromptBuilder`'s descriptive text is unchanged (harmless, complementary) — this fix is about the real API parameters, not the prompt text.
+- **Ownership check for explicit `knowledgeIds`:** `RepositoryContextRetriever.loadActiveKnowledge` now asserts ownership for every resolved entry via a new private `assertKnowledgeOwnership`, mirroring `KnowledgeService.assertAccess`'s exact rule (project-scoped entries inherit the project's ownership; project-less "global" entries need no check, per Document 11 §2's single-user MVP). Reimplemented locally rather than importing `assertProjectOwnership` — that helper lives under `features/shared/services/`, which the `ai/` ESLint boundary (Document 13 §24, Amendment 22) correctly still blocks; the two-line rule itself is small enough to duplicate rather than justify a new shared location `ai/` and `features/` could both reach.
+- **AI response preserved on persistence failure:** the Route Handler now wraps `AIChatService.recordTurn()` in its own `try`/`catch`, separate from every earlier failure in the request. On success: `201` with the response and a real `conversationId`, as before. On a persistence failure: `200` with the same validated response, `citations`, and `usage`, plus `conversationId: null` and a `warning` field explaining the turn wasn't saved — the failure is logged (`logger.error`, actor/action/entity/result shape) but never discards a response that already succeeded.
+- **Stage 1 → Stage 2 approval requires real evidence:** `AIOrchestrator` gained `assertStage2Approval`, called right after context retrieval (before the provider is invoked, so a doomed request never burns a real API call). It rejects (`ValidationError`, 400) unless `context.conversationHistory` contains an `ASSISTANT` message with `mode: "IMPLEMENT"` whose content parses as a valid `implementStage1OutputSchema`. `approved: true` remains a required, caller-only flag (the Orchestrator still never sets it autonomously) — this adds a second, structural requirement on top of it, rather than replacing it. No new field, table, or "approval marker" was introduced (that would be an architecture change, out of this phase's scope) — the plan's own presence in conversation history *is* the marker.
+- **Rate limits normalized:** `OpenAIProvider` gained a private `mapProviderError`, checked in both `chat()`'s and `stream()`'s catch blocks: `error instanceof OpenAI.RateLimitError` (the SDK's own typed 429) now throws the existing `RateLimitedError` (`RATE_LIMITED`, 429) instead of the generic `AIProviderError` (502) every other provider failure still uses.
+
+**Consistency Rationale:** Every fix closes a gap between documented intent and actual behavior inside the Phase 5 architecture — none required a new layer, dependency direction, table, or capability. The review that found these explicitly noted "if the architecture were wrong, these would require redesign. Instead, they require refinement," which is exactly what this amendment records.
+
+**Applied text change:** None to Documents 1–12 (no architectural text was inconsistent — only the code was). Document 9's Phase 5 section is not re-opened; this is recorded as its own amendment since it's a distinct, dated correction pass, the same pattern Amendment 21 (Phase 4 UX Corrections) established for Phase 4.
+
+---
+
+# 27. Amendment Ledger Summary
 
 | # | Topic | Affected Document(s) | Status |
 |---|---|---|---|
@@ -394,8 +411,9 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 | 21 | Phase 4 UX corrections (route group fix, responsive sidebar, ConfirmDialog, Search result routing, Project cross-navigation, truncation notice, Documents table consistency, required-field indicators) | Doc 9 Phase 4 | Applied |
 | 22 | `ai/` ESLint boundary correction (enforcement only, no text change) | eslint.config.js | Applied |
 | 23 | Phase 5 AI Layer architecture (Orchestrator factory, `.strict()` response validation, `findGlobal`, `AIChatService` persistence, embeddings exclusion, Document 12 status correction) | Doc 9 Phase 5, Doc 12 | Applied |
+| 24 | Phase 5.5 AI Stabilization (Settings applied to provider calls, Knowledge ownership check, persistence-failure response preservation, Stage 1→2 approval enforcement, rate-limit normalization) | None (behavioral only, no text change) | Applied |
 
-All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, and 12 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint; Amendment 18 originated from the Phase 3 implementation itself; Amendment 19 originated from the Document 14 Revision 3 pre-Phase-4 audit; Amendment 20 originated from the Phase 4 implementation itself; Amendment 21 originated from the read-only Pre-Phase-5 UX Review, which found Phase 4's "Full navigation operational" exit criterion was not actually met and reopened Phase 4 for correction before Phase 5 was authorized; Amendments 22–23 originated from the Phase 5 implementation itself. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
+All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, and 12 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint; Amendment 18 originated from the Phase 3 implementation itself; Amendment 19 originated from the Document 14 Revision 3 pre-Phase-4 audit; Amendment 20 originated from the Phase 4 implementation itself; Amendment 21 originated from the read-only Pre-Phase-5 UX Review, which found Phase 4's "Full navigation operational" exit criterion was not actually met and reopened Phase 4 for correction before Phase 5 was authorized; Amendments 22–23 originated from the Phase 5 implementation itself; Amendment 24 originated from the read-only Pre-Phase-6 AI Architecture Review, which authorized a scoped Phase 5.5 stabilization pass before Knowledge Intelligence work begins. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
 
 ---
 

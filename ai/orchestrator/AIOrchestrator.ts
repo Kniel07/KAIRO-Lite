@@ -1,11 +1,15 @@
 import type { AIMode } from "@/types/ai";
 import type { AIProvider } from "@/ai/providers/AIProvider";
 import { OpenAIProvider } from "@/ai/providers/OpenAIProvider";
-import { RepositoryContextRetriever, type ContextRetriever } from "@/ai/context/ContextRetriever";
+import {
+  RepositoryContextRetriever,
+  type AssembledContext,
+  type ContextRetriever,
+} from "@/ai/context/ContextRetriever";
 import { selectPromptTemplate, type PromptTemplate } from "@/ai/prompts/templates";
 import { buildPromptMessages } from "@/ai/prompts/PromptBuilder";
-import type { ModeOutput } from "@/ai/schemas/ModeOutputSchemas";
-import { AIProviderError } from "@/lib/utils/errors";
+import { implementStage1OutputSchema, type ModeOutput } from "@/ai/schemas/ModeOutputSchemas";
+import { AIProviderError, ValidationError } from "@/lib/utils/errors";
 import { logger } from "@/lib/logger";
 
 // Document 8 §23 — AI Contract (mode + prompt required; projectId,
@@ -58,8 +62,20 @@ export class AIOrchestrator {
       knowledgeIds: request.knowledgeIds,
     });
 
+    this.assertStage2Approval(request, context);
+
     const messages = buildPromptMessages(template, context, request.prompt);
-    const response = await this.provider.chat({ messages });
+    // Document 13 §26 (Phase 5.5, Amendment 24) — the caller's actual Settings
+    // (Document 10 §5.11) now drive the real provider call, not just
+    // descriptive text in the prompt (`PromptBuilder` still includes that
+    // text too, for the model's own awareness of language/etc.). Falls
+    // through to the provider's own defaults when no Settings row exists
+    // or a field is unset — see `OpenAIProvider`'s `aiConfig` fallback.
+    const response = await this.provider.chat({
+      messages,
+      model: context.userPreferences?.defaultModel,
+      temperature: context.userPreferences?.aiTemperature,
+    });
     const content = this.parseAndValidate(response.content, template, request);
 
     // Document 12 §2/§4 — knowledge actually placed in context is what the
@@ -70,6 +86,35 @@ export class AIOrchestrator {
     );
 
     return { content, citations, usage: response.usage };
+  }
+
+  /**
+   * Document 12 §6 — Stage 2 (code) may only run when the caller passes
+   * `approved: true`. Previously that boolean was trusted at face value,
+   * which meant nothing proved a Stage 1 plan had ever actually been
+   * produced (Document 13 §26, Amendment 24 — Phase 5.5 stabilization). This
+   * requires the conversation's own history to contain a message that
+   * really is a valid Stage 1 plan, so the approval is attached to a real
+   * prior artifact rather than asserted — the mechanical enforcement of
+   * "Human approval always overrides AI suggestions" (Doc 4 §1).
+   */
+  private assertStage2Approval(request: AIOrchestratorRequest, context: AssembledContext): void {
+    if (request.mode !== "IMPLEMENT" || !request.approved) return;
+
+    const hasApprovedStage1Plan = context.conversationHistory.some((message) => {
+      if (message.role !== "ASSISTANT" || message.mode !== "IMPLEMENT") return false;
+      try {
+        return implementStage1OutputSchema.safeParse(JSON.parse(message.content)).success;
+      } catch {
+        return false;
+      }
+    });
+
+    if (!hasApprovedStage1Plan) {
+      throw new ValidationError(
+        "IMPLEMENT Stage 2 (approved: true) requires a prior Stage 1 plan already present in this conversation's history. Pass the conversationId from the Stage 1 response, or omit `approved` to generate a plan first.",
+      );
+    }
   }
 
   /**

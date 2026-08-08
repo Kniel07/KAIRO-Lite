@@ -121,12 +121,39 @@ export class RepositoryContextRetriever implements ContextRetriever {
     return project;
   }
 
+  /**
+   * Document 13 §26 (Phase 5.5, Amendment 24) — explicit `knowledgeIds` are
+   * a caller-supplied point lookup by id, the same shape as
+   * `KnowledgeService.get()` (Phase 3), which asserts ownership via
+   * `assertProjectOwnership` before returning. This previously skipped
+   * that check entirely; it now mirrors `KnowledgeService.assertAccess`'s
+   * exact rule (`ai/` cannot import that Service-layer helper directly —
+   * Document 5 §20 — so the same two-line rule is reimplemented here
+   * against the Repository layer only).
+   */
   private async loadActiveKnowledge(params: ContextRetrieverParams): Promise<Knowledge[]> {
     if (!params.knowledgeIds?.length) return [];
     const found = await Promise.all(
       params.knowledgeIds.map((id) => this.knowledgeRepository.findById(id)),
     );
-    return found.filter((entry): entry is Knowledge => entry !== null);
+    const resolved = found.filter((entry): entry is Knowledge => entry !== null);
+    await Promise.all(resolved.map((entry) => this.assertKnowledgeOwnership(entry, params.userId)));
+    return resolved;
+  }
+
+  /** Mirrors `KnowledgeService.assertAccess` (Phase 3) — Knowledge has no
+   * owner field of its own (Document 10 §5.4); project-scoped entries
+   * inherit the project's ownership, project-less ("global") entries are
+   * accessible to any caller under single-user MVP (Document 11 §2). */
+  private async assertKnowledgeOwnership(knowledge: Knowledge, userId: string): Promise<void> {
+    if (!knowledge.projectId) return;
+    const project = await this.projectRepository.findByIdIncludingArchived(knowledge.projectId);
+    if (!project) {
+      throw new NotFoundError("PROJECT");
+    }
+    if (project.ownerId !== userId) {
+      throw new ForbiddenError("You do not have access to this knowledge entry.");
+    }
   }
 
   /** Doc 4 §11 / Doc 12 §2 — full-text ranked, avoiding prompt bloat by capping the result count. */

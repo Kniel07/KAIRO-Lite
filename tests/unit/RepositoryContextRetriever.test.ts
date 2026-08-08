@@ -210,6 +210,68 @@ describe("RepositoryContextRetriever", () => {
 
       expect(context.activeKnowledge.map((k) => k.id)).toEqual(["k-1"]);
     });
+
+    it("allows project-less (global) Knowledge with no ownership check", async () => {
+      const repos = makeFakeRepositories();
+      vi.mocked(repos.knowledgeRepository.findById).mockResolvedValue(
+        makeKnowledge({ id: "k-global", projectId: null }),
+      );
+      const retriever = makeRetriever(repos);
+
+      const context = await retriever.retrieve({
+        userId: "user-1",
+        prompt: "",
+        knowledgeIds: ["k-global"],
+      });
+
+      expect(context.activeKnowledge.map((k) => k.id)).toEqual(["k-global"]);
+      expect(repos.projectRepository.findByIdIncludingArchived).not.toHaveBeenCalled();
+    });
+
+    it("includes project-scoped Knowledge when the caller owns the project", async () => {
+      const repos = makeFakeRepositories();
+      vi.mocked(repos.knowledgeRepository.findById).mockResolvedValue(
+        makeKnowledge({ id: "k-owned", projectId: "project-1" }),
+      );
+      vi.mocked(repos.projectRepository.findByIdIncludingArchived).mockResolvedValue(makeProject());
+      const retriever = makeRetriever(repos);
+
+      const context = await retriever.retrieve({
+        userId: "user-1",
+        prompt: "",
+        knowledgeIds: ["k-owned"],
+      });
+
+      expect(context.activeKnowledge.map((k) => k.id)).toEqual(["k-owned"]);
+    });
+
+    it("throws ForbiddenError for project-scoped Knowledge the caller does not own (Phase 5.5, Amendment 24)", async () => {
+      const repos = makeFakeRepositories();
+      vi.mocked(repos.knowledgeRepository.findById).mockResolvedValue(
+        makeKnowledge({ id: "k-not-mine", projectId: "project-1" }),
+      );
+      vi.mocked(repos.projectRepository.findByIdIncludingArchived).mockResolvedValue(
+        makeProject({ ownerId: "someone-else" }),
+      );
+      const retriever = makeRetriever(repos);
+
+      await expect(
+        retriever.retrieve({ userId: "user-1", prompt: "", knowledgeIds: ["k-not-mine"] }),
+      ).rejects.toThrow(ForbiddenError);
+    });
+
+    it("throws NotFoundError for project-scoped Knowledge whose project no longer exists", async () => {
+      const repos = makeFakeRepositories();
+      vi.mocked(repos.knowledgeRepository.findById).mockResolvedValue(
+        makeKnowledge({ id: "k-orphaned", projectId: "deleted-project" }),
+      );
+      vi.mocked(repos.projectRepository.findByIdIncludingArchived).mockResolvedValue(null);
+      const retriever = makeRetriever(repos);
+
+      await expect(
+        retriever.retrieve({ userId: "user-1", prompt: "", knowledgeIds: ["k-orphaned"] }),
+      ).rejects.toThrow(NotFoundError);
+    });
   });
 
   describe("Related Knowledge (priority 3 — full-text ranked)", () => {

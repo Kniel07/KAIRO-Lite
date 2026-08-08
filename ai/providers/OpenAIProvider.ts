@@ -8,7 +8,7 @@ import type {
   AIProviderHealth,
 } from "@/types/ai";
 import { aiConfig } from "@/config/ai";
-import { AIProviderError } from "@/lib/utils/errors";
+import { AIProviderError, RateLimitedError } from "@/lib/utils/errors";
 
 // Document 4 §7 — MVP's only real provider (Anthropic/Google/Local are
 // "future" per Document 4 §7). Document 1 §8 lists the OpenAI SDK as a
@@ -46,9 +46,7 @@ export class OpenAIProvider implements AIProvider {
         response_format: { type: "json_object" },
       });
     } catch (error) {
-      throw new AIProviderError(
-        error instanceof Error ? error.message : "The AI provider request failed.",
-      );
+      throw this.mapProviderError(error);
     }
 
     const content = completion.choices[0]?.message?.content;
@@ -83,9 +81,7 @@ export class OpenAIProvider implements AIProvider {
         stream: true,
       });
     } catch (error) {
-      throw new AIProviderError(
-        error instanceof Error ? error.message : "The AI provider request failed.",
-      );
+      throw this.mapProviderError(error);
     }
 
     for await (const chunk of stream) {
@@ -111,5 +107,23 @@ export class OpenAIProvider implements AIProvider {
 
   async health(): Promise<AIProviderHealth> {
     return { healthy: Boolean(aiConfig.openaiApiKey) };
+  }
+
+  /**
+   * Document 13 §26 (Phase 5.5, Amendment 24) — a real OpenAI 429
+   * (`OpenAI.RateLimitError`) previously collapsed into the same generic
+   * `AI_PROVIDER_ERROR` (502) as every other provider failure, even
+   * though Document 8 §18 already defines a dedicated `RATE_LIMITED`
+   * (429) error code (`lib/utils/errors.ts`, unused until now) a client
+   * could sensibly special-case ("try again shortly") instead of treating
+   * as a hard failure.
+   */
+  private mapProviderError(error: unknown): AIProviderError | RateLimitedError {
+    if (error instanceof OpenAI.RateLimitError) {
+      return new RateLimitedError(error.message);
+    }
+    return new AIProviderError(
+      error instanceof Error ? error.message : "The AI provider request failed.",
+    );
   }
 }

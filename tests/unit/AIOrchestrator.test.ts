@@ -3,7 +3,27 @@ import { AIOrchestrator } from "@/ai/orchestrator/AIOrchestrator";
 import type { AIProvider } from "@/ai/providers/AIProvider";
 import type { AssembledContext, ContextRetriever } from "@/ai/context/ContextRetriever";
 import type { AIChatResponse } from "@/types/ai";
-import { AIProviderError } from "@/lib/utils/errors";
+import type { Message } from "@/types/database";
+import { AIProviderError, ValidationError } from "@/lib/utils/errors";
+
+// Document 13 §27 (Phase 5.5, Amendment 24) — a valid prior Stage 1 plan,
+// as it would actually appear in `conversationHistory` (an ASSISTANT
+// message with `mode: "IMPLEMENT"` whose content is the Stage 1 JSON).
+function makeApprovedStage1Message(): Message {
+  return {
+    id: "message-stage1",
+    conversationId: "conversation-1",
+    role: "ASSISTANT",
+    content: JSON.stringify({
+      plan: [{ file: "a.ts", action: "CREATE", description: "d" }],
+      risks: [],
+      blockingQuestions: [],
+    }),
+    mode: "IMPLEMENT",
+    tokenCount: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  } as Message;
+}
 
 // Document 12 §7 — Response Validation is the core behavior under test
 // here: every mode's output schema is `.strict()` (Document 12 §7 check 5,
@@ -194,22 +214,69 @@ describe("AIOrchestrator", () => {
       ).rejects.toThrow(AIProviderError);
     });
 
-    it("selects the Stage 2 (Code) schema only when approved: true is explicitly passed", async () => {
+    it("selects the Stage 2 (Code) schema when approved: true is passed AND a prior Stage 1 plan is in conversation history", async () => {
       const stage2Output = {
         files: [{ path: "a.ts", content: "code", language: "ts" }],
         summary: "done",
       };
       const provider = makeProvider({ content: JSON.stringify(stage2Output) });
-      const orchestrator = new AIOrchestrator(provider, makeContextRetriever());
+      const contextWithStage1 = makeContext({ conversationHistory: [makeApprovedStage1Message()] });
+      const orchestrator = new AIOrchestrator(provider, makeContextRetriever(contextWithStage1));
 
       const result = await orchestrator.execute({
         mode: "IMPLEMENT",
         prompt: "implement X",
         userId: "user-1",
+        conversationId: "conversation-1",
         approved: true,
       });
 
       expect(result.content).toEqual(stage2Output);
+    });
+
+    it("rejects approved: true when no prior Stage 1 plan exists in conversation history", async () => {
+      const stage2Output = {
+        files: [{ path: "a.ts", content: "code", language: "ts" }],
+        summary: "done",
+      };
+      const provider = makeProvider({ content: JSON.stringify(stage2Output) });
+      // No conversationId / no prior history at all.
+      const orchestrator = new AIOrchestrator(provider, makeContextRetriever());
+
+      await expect(
+        orchestrator.execute({
+          mode: "IMPLEMENT",
+          prompt: "implement X",
+          userId: "user-1",
+          approved: true,
+        }),
+      ).rejects.toThrow(ValidationError);
+      expect(provider.chat).not.toHaveBeenCalled();
+    });
+
+    it("rejects approved: true when the conversation history contains messages but no valid Stage 1 plan", async () => {
+      const provider = makeProvider({ content: JSON.stringify({ files: [], summary: "x" }) });
+      const unrelatedMessage: Message = {
+        id: "message-unrelated",
+        conversationId: "conversation-1",
+        role: "ASSISTANT",
+        content: JSON.stringify({ ideas: [], openQuestions: [] }), // a THINK response, not a plan
+        mode: "THINK",
+        tokenCount: null,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      } as Message;
+      const contextWithoutPlan = makeContext({ conversationHistory: [unrelatedMessage] });
+      const orchestrator = new AIOrchestrator(provider, makeContextRetriever(contextWithoutPlan));
+
+      await expect(
+        orchestrator.execute({
+          mode: "IMPLEMENT",
+          prompt: "implement X",
+          userId: "user-1",
+          conversationId: "conversation-1",
+          approved: true,
+        }),
+      ).rejects.toThrow(ValidationError);
     });
 
     it("does not accept Stage 2 output when approved is false/omitted (still validates against Stage 1's schema)", async () => {
@@ -280,6 +347,53 @@ describe("AIOrchestrator", () => {
       projectId: "project-1",
       conversationId: "conversation-1",
       knowledgeIds: ["k-1"],
+    });
+  });
+
+  describe("user Settings applied to the provider call", () => {
+    it("passes the caller's defaultModel/aiTemperature from Settings to provider.chat", async () => {
+      const context = makeContext({
+        userPreferences: {
+          id: "settings-1",
+          userId: "user-1",
+          theme: "SYSTEM",
+          defaultModel: "gpt-4.1-mini",
+          aiTemperature: 0.2,
+          language: "en",
+          timezone: "UTC",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as AssembledContext["userPreferences"],
+      });
+      const provider = makeProvider({
+        content: JSON.stringify({
+          ideas: [{ title: "A", description: "d", assumptions: [], tradeoffs: [] }],
+          openQuestions: [],
+        }),
+      });
+      const orchestrator = new AIOrchestrator(provider, makeContextRetriever(context));
+
+      await orchestrator.execute({ mode: "THINK", prompt: "hi", userId: "user-1" });
+
+      expect(provider.chat).toHaveBeenCalledWith(
+        expect.objectContaining({ model: "gpt-4.1-mini", temperature: 0.2 }),
+      );
+    });
+
+    it("passes undefined model/temperature when no Settings row exists, letting the provider fall back to its own defaults", async () => {
+      const provider = makeProvider({
+        content: JSON.stringify({
+          ideas: [{ title: "A", description: "d", assumptions: [], tradeoffs: [] }],
+          openQuestions: [],
+        }),
+      });
+      const orchestrator = new AIOrchestrator(provider, makeContextRetriever(makeContext()));
+
+      await orchestrator.execute({ mode: "THINK", prompt: "hi", userId: "user-1" });
+
+      expect(provider.chat).toHaveBeenCalledWith(
+        expect.objectContaining({ model: undefined, temperature: undefined }),
+      );
     });
   });
 });

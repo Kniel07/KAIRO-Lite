@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Implementation Plan
 
-Version: 1.4 (amended)
+Version: 1.5 (amended)
 Status: Approved
 
 ---
@@ -253,6 +253,8 @@ Modes
 Exit Criteria
 
 ✓ AI requests execute through Orchestrator only — `app/api/v1/ai/chat/route.ts` is the only Route Handler that touches `ai/` at all, and only via `createAIOrchestrator()`; verified by the ESLint boundary (`no-restricted-imports` blocks `@/ai/providers/**` from every other `app/**`/`components/**` file) and by a live end-to-end request trace (session-cookie auth) through auth → Zod validation → `AIOrchestrator.execute` → `RepositoryContextRetriever` (confirmed via a real 404 `PROJECT_NOT_FOUND` for a nonexistent `projectId`, proving the ownership/existence check actually runs) → `PromptBuilder` → `OpenAIProvider.chat()`, which reached a real outbound HTTPS attempt to `api.openai.com` before failing on this environment's network egress allowlist (not a code defect — `OPENAI_API_KEY` is a dev placeholder here, same limitation Phase 4 documented for magic-link email delivery). 122 unit tests (39 new) cover `AIOrchestrator` per-mode validation (including cross-mode leakage rejection and the IMPLEMENT Stage 1/Stage 2 gate), `RepositoryContextRetriever`'s six-priority assembly and ownership checks, `PromptBuilder`'s context-omission behavior, and `AIChatService`'s persistence/audit/ownership logic. <!-- Amended -->
+
+A read-only Pre-Phase-6 AI Architecture Review, requested before Knowledge Intelligence work, found five gaps between this implementation and its own stated intent — none architectural. A scoped **Phase 5.5 — AI Stabilization** pass closed all five: `Settings.defaultModel`/`aiTemperature` now actually drive `provider.chat()` (previously fetched but unused); explicit `knowledgeIds` now assert project ownership (previously skipped, mirroring a check every other Knowledge read path already had); a persistence failure after a successful AI response now degrades to a `200` with the response preserved and a warning, instead of discarding it; IMPLEMENT Stage 2 now requires a real Stage 1 plan in conversation history, not just the `approved: true` boolean; and a real OpenAI rate limit now surfaces as `RATE_LIMITED` instead of the generic `AI_PROVIDER_ERROR`. 137 unit tests (15 more) cover all five fixes; the general request flow and the new Stage 2 rejection path were both re-verified live. Document 13 §26 (Amendment 24) records the pass. <!-- Amended -->
 
 ---
 
