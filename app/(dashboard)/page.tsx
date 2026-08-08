@@ -1,8 +1,6 @@
-import { PlaceholderPage } from "@/components/shared/PlaceholderPage";
+import { DashboardView } from "@/features/dashboard/components/DashboardView";
 
-// Document 9, Phase 4 — Frontend implements the real Dashboard (project
-// overview, recent activity, knowledge statistics, AI insights —
-// Document 2 §4). This is the shell placeholder only.
+// Document 5 §3 — app/ contains routing only (Document 9 Phase 4).
 export default function DashboardPage() {
-  return <PlaceholderPage title="Dashboard" phase="Phase 4 (Frontend)" />;
+  return <DashboardView />;
 }

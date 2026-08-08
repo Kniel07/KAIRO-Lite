@@ -1,6 +1,6 @@
-import { PlaceholderPage } from "@/components/shared/PlaceholderPage";
+import { DocumentsView } from "@/features/documents/components/DocumentsView";
 
-// Document 9, Phase 3-4 implement this route.
+// Document 5 §3 — app/ contains routing only (Document 9 Phase 4).
 export default function DocumentsPage() {
-  return <PlaceholderPage title="Documents" phase="Phase 3-4" />;
+  return <DocumentsView />;
 }

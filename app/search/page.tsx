@@ -1,6 +1,6 @@
-import { PlaceholderPage } from "@/components/shared/PlaceholderPage";
+import { SearchView } from "@/features/search/components/SearchView";
 
-// Document 9, Phase 6 (Knowledge & Search) implements this route.
+// Document 5 §3 — app/ contains routing only (Document 9 Phase 4).
 export default function SearchPage() {
-  return <PlaceholderPage title="Search" phase="Phase 6" />;
+  return <SearchView />;
 }

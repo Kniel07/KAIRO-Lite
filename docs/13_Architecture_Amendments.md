@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Architecture Amendments
 
-Version: 1.5 (applied)
+Version: 1.6 (applied)
 Status: Applied — approved by the project owner. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been updated in place to reflect every amendment below.
 
 ---
@@ -294,7 +294,26 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 
 ---
 
-# 22. Amendment Ledger Summary
+---
+
+# 22. Amendment 20 — Phase 4 Frontend Architecture
+
+**Problem:** Document 9's Phase 4 authorization required Settings as a page, but Document 9's Phase 3 module list never included `SettingsService` — the Component → Route → Service → Repository → Prisma chain (Document 7 §8) meant the Settings Route Handler had nothing to call. Separately, three implementation-level decisions needed making that no document specified: how Client Components reach Route Handlers without violating the Component/page → Service boundary (Amendment 19), whether to add new UI-library dependencies for a modal/select, and how the Markdown editor should relate to the existing sanitization infrastructure.
+
+**Chosen Solution:**
+- **`SettingsService`:** added following the exact shape already specified in Document 10 §5.11 and Document 8 §15 — `get`/`update`, auto-provisioning a default row on first access (audited as `CREATE`), explicit updates audited as `UPDATE`. A mechanical gap-fill, not a redesign.
+- **Client data fetching:** every list/detail/mutation in `features/*/components/**` goes through a `features/*/hooks/*.ts` file using TanStack Query, calling `fetch()` against `/api/v1/**` (via `lib/utils/api-client.ts`'s envelope-unwrapping helper) — never a Service import, which the existing ESLint boundary (Amendment 19) already forbids outside `app/api/**`. Route Handlers resolve the session via `lib/auth/session.ts`'s `requireUserId()`, validate with the same Zod schemas Phase 3's Services already use, and call exactly one Service method each.
+- **No new UI-library dependencies:** `components/ui/dialog.tsx` is built on the native `<dialog>` element (not `@radix-ui/react-dialog`, which isn't installed) — `showModal()` gives focus trapping, Escape-to-close, and a real backdrop without adding a package. `components/ui/select.tsx` is a native `<select>` for the same reason — full keyboard/screen-reader support for free.
+- **`MarkdownEditor` (`components/editors/`):** calls `lib/markdown/render.ts`'s existing `renderMarkdown()` for its Preview tab — the same sanitized rendering pipeline built in the Infrastructure Hardening Sprint (Amendment 15), not a second rendering path. Used by Knowledge and Document forms only — `Note.content` is plain text (Document 10 §5.3 names the field `content`, not `markdown`), so Notes forms use a plain `Textarea`.
+- **Form/select validation fix:** a native `<select>`'s empty/placeholder option submits `""`, which `z.string().uuid().optional()` schemas (correct at the API layer) reject — silently, since `handleSubmit` simply never calls `onSubmit` and no form here rendered an error for that specific field. Fixed via React Hook Form's `register(name, { setValueAs })`, not a Zod `.preprocess()` wrapper around the schema (confirmed by trying it: `.preprocess()` changes the schema's inferred input type to `unknown`, which breaks `useForm<T>`'s single type parameter). Found and fixed via real browser testing (session-cookie auth, since no real email delivery exists in this environment) — the create-Note flow silently did nothing before this fix.
+
+**Consistency Rationale:** Every decision here either fills a mechanical gap the constitution already fully specified elsewhere (`SettingsService`) or chooses the option that avoids inventing new dependencies/patterns beyond what Documents 1–13 already established (reusing `lib/markdown`, reusing the Amendment 19 boundary, avoiding new UI packages).
+
+**Applied text change:** Document 9, Phase 4 — Pages/Deliverables/Exit Criteria annotated with the `SettingsService` gap-fill, the `MarkdownEditor`'s reuse of existing infrastructure, the Route Handlers built alongside the pages, and the real-browser verification performed.
+
+---
+
+# 23. Amendment Ledger Summary
 
 | # | Topic | Affected Document(s) | Status |
 |---|---|---|---|
@@ -318,8 +337,9 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 | 17 | CI/CD pipeline | Doc 9 (Phase 0 deliverable annotated) | Applied |
 | 18 | Phase 3 backend services architecture (transaction boundaries, governance read path, note conversion) | Doc 7 §8, Doc 9 Phase 3 | Applied |
 | 19 | Component/page → Service boundary enforcement | Doc 7 §8 (enforcement only, no text change) | Applied |
+| 20 | Phase 4 frontend architecture (SettingsService gap-fill, client data fetching, no new UI dependencies, MarkdownEditor reuse) | Doc 8 §15, Doc 9 Phase 4 | Applied |
 
-All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint; Amendment 18 originated from the Phase 3 implementation itself; Amendment 19 originated from the Document 14 Revision 3 pre-Phase-4 audit that Phase 3's own completion triggered. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
+All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint; Amendment 18 originated from the Phase 3 implementation itself; Amendment 19 originated from the Document 14 Revision 3 pre-Phase-4 audit; Amendment 20 originated from the Phase 4 implementation itself. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
 
 ---
 

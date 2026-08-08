@@ -6,10 +6,19 @@ import { prisma, type Db } from "@/lib/db/client";
 // implement the generic `Repository<T, C, U>` shape — there is no
 // meaningful `findMany`/`archive` for a per-user singleton.
 //
+// Interface `SettingsService` depends on (Document 7 §8) — see
+// `ProjectRepositoryLike` for why this exists alongside the concrete class.
+export interface SettingsRepositoryLike {
+  findByUserId(userId: string): Promise<Settings | null>;
+  create(input: Prisma.SettingsCreateInput): Promise<Settings>;
+  update(userId: string, input: Prisma.SettingsUpdateInput): Promise<Settings>;
+}
+
 // Constructor-injected `client` (Phase 3, transaction boundaries) — see
-// `UserRepository` for the pattern this follows. Not used by any Phase 3
-// Service — refactored now for consistency.
-export class SettingsRepository {
+// `UserRepository` for the pattern this follows. Used by `SettingsService`
+// (Phase 4 — see that file's header comment for why Phase 3's module list
+// didn't include it but Phase 4 needs it).
+export class SettingsRepository implements SettingsRepositoryLike {
   constructor(private readonly client: Db = prisma) {}
 
   async findByUserId(userId: string): Promise<Settings | null> {

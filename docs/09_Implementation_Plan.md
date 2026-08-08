@@ -203,7 +203,7 @@ Pages
 - Knowledge
 - Documents
 - Search
-- Settings
+- Settings — required `SettingsService` (Document 13 §20's Phase 3 module list omitted it; the Component → Route → Service chain meant the Settings page needed one to exist) <!-- Amended -->
 
 Deliverables
 
@@ -211,14 +211,16 @@ Deliverables
 - Layout
 - Forms
 - Tables
-- Editors
+- Editors — `MarkdownEditor` (`components/editors/`) reuses the existing markdown infrastructure (`lib/markdown/render.ts`), not a new rendering path
 - Empty states
 - Loading states
 - Error boundaries
 
+Route Handlers (`app/api/v1/**`) were built alongside the pages — Document 8's contract, one Service call per handler, standard envelope — since Components consume Route Handlers only (Document 7 §8), never a Service directly (enforced by the pre-Phase-4 ESLint boundary, Document 13 §21 Amendment 19).
+
 Exit Criteria
 
-✓ Full navigation operational
+✓ Full navigation operational — verified in a real browser session (session-cookie auth, not the magic-link flow, since no real email delivery exists in this environment): every page loaded, and the full workflow (create/edit/archive a Project, create a Note and convert it to both Knowledge and a Document, create Knowledge directly with the Markdown editor's live preview, create and publish a Document, run a real full-text Search that returned ranked results, save Settings) completed with no console or page errors. Test data and the manual session were removed afterward.
 
 ---
 

@@ -1,6 +1,6 @@
-import { PlaceholderPage } from "@/components/shared/PlaceholderPage";
+import { SettingsView } from "@/features/settings/components/SettingsView";
 
-// Document 9, Phase 3-4 implement this route (SettingsService + Settings API, Document 8 §15).
+// Document 5 §3 — app/ contains routing only (Document 9 Phase 4).
 export default function SettingsPage() {
-  return <PlaceholderPage title="Settings" phase="Phase 3-4" />;
+  return <SettingsView />;
 }

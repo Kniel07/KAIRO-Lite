@@ -1,38 +1,92 @@
-import Link from "next/link";
+import {
+  LayoutDashboard,
+  FolderKanban,
+  BookOpen,
+  StickyNote,
+  FileText,
+  Sparkles,
+  Search,
+  Settings,
+} from "lucide-react";
+import type { ReactNode } from "react";
 import { ROUTES } from "@/constants/routes";
+import { NavLink } from "@/components/navigation/NavLink";
+import { Header } from "@/components/layout/Header";
 
-// Document 5 §3 — application shell only (Document 9, Phase 0 scope). No
-// business logic, no data fetching — navigation chrome for the routes that
-// later phases will fill in.
-const NAV_ITEMS: { href: string; label: string }[] = [
-  { href: ROUTES.home, label: "Dashboard" },
-  { href: ROUTES.projects, label: "Projects" },
-  { href: ROUTES.knowledge, label: "Knowledge" },
-  { href: ROUTES.notes, label: "Notes" },
-  { href: ROUTES.documents, label: "Documents" },
-  { href: ROUTES.ai, label: "AI Workspace" },
-  { href: ROUTES.search, label: "Search" },
-  { href: ROUTES.settings, label: "Settings" },
+// Document 5 §3 — application shell (Document 9 Phase 4: "Navigation",
+// "Layout"). No business logic, no data fetching here — that lives in each
+// page's own Client Components via the feature hooks.
+//
+// Icons are pre-rendered elements, not component references — see
+// `NavLink`'s header comment for why (Server → Client Component prop
+// serialization).
+const ICON_CLASS = "h-4 w-4";
+const NAV_ITEMS: { href: string; label: string; icon: ReactNode }[] = [
+  {
+    href: ROUTES.home,
+    label: "Dashboard",
+    icon: <LayoutDashboard className={ICON_CLASS} aria-hidden="true" />,
+  },
+  {
+    href: ROUTES.projects,
+    label: "Projects",
+    icon: <FolderKanban className={ICON_CLASS} aria-hidden="true" />,
+  },
+  {
+    href: ROUTES.knowledge,
+    label: "Knowledge",
+    icon: <BookOpen className={ICON_CLASS} aria-hidden="true" />,
+  },
+  {
+    href: ROUTES.notes,
+    label: "Notes",
+    icon: <StickyNote className={ICON_CLASS} aria-hidden="true" />,
+  },
+  {
+    href: ROUTES.documents,
+    label: "Documents",
+    icon: <FileText className={ICON_CLASS} aria-hidden="true" />,
+  },
+  {
+    href: ROUTES.ai,
+    label: "AI Workspace",
+    icon: <Sparkles className={ICON_CLASS} aria-hidden="true" />,
+  },
+  {
+    href: ROUTES.search,
+    label: "Search",
+    icon: <Search className={ICON_CLASS} aria-hidden="true" />,
+  },
+  {
+    href: ROUTES.settings,
+    label: "Settings",
+    icon: <Settings className={ICON_CLASS} aria-hidden="true" />,
+  },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:bg-background focus:p-2 focus:shadow-lg"
+      >
+        Skip to main content
+      </a>
       <aside className="w-56 shrink-0 border-r border-border p-4">
         <div className="mb-6 text-lg font-semibold">KAIRO-Lite</div>
-        <nav className="flex flex-col gap-1">
+        <nav aria-label="Main navigation" className="flex flex-col gap-1">
           {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-            >
-              {item.label}
-            </Link>
+            <NavLink key={item.href} href={item.href} label={item.label} icon={item.icon} />
           ))}
         </nav>
       </aside>
-      <main className="flex flex-1 flex-col">{children}</main>
+      <div className="flex flex-1 flex-col">
+        <Header />
+        <main id="main-content" className="flex flex-1 flex-col">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

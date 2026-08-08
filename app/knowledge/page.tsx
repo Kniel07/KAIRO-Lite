@@ -1,6 +1,6 @@
-import { PlaceholderPage } from "@/components/shared/PlaceholderPage";
+import { KnowledgeView } from "@/features/knowledge/components/KnowledgeView";
 
-// Document 9, Phase 3 (KnowledgeService) + Phase 6 (Knowledge & Search) implement this route.
+// Document 5 §3 — app/ contains routing only (Document 9 Phase 4).
 export default function KnowledgePage() {
-  return <PlaceholderPage title="Knowledge" phase="Phase 3, 6" />;
+  return <KnowledgeView />;
 }
