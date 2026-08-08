@@ -10,10 +10,23 @@ import type { FindManyParams, PagedResult } from "@/features/shared/types/Reposi
 // explicitly-justified exception, not an oversight) — there is no
 // update/archive operation to expose.
 //
+// Interface `AIChatService`/`RepositoryContextRetriever` depend on
+// (Document 7 §8) — see `ProjectRepositoryLike` for why this exists
+// alongside the concrete class. Added in Phase 5 when the first real
+// consumers arrived.
+export interface MessageRepositoryLike {
+  findById(id: string): Promise<Message | null>;
+  findByConversation(
+    conversationId: string,
+    params?: FindManyParams,
+  ): Promise<PagedResult<Message>>;
+  create(input: Prisma.MessageCreateInput): Promise<Message>;
+}
+
 // Constructor-injected `client` (Phase 3, transaction boundaries) — see
 // `UserRepository` for the pattern this follows. Not used by any Phase 3
 // Service (AI Workspace is Phase 5) — refactored now for consistency.
-export class MessageRepository {
+export class MessageRepository implements MessageRepositoryLike {
   constructor(private readonly client: Db = prisma) {}
 
   async findById(id: string): Promise<Message | null> {

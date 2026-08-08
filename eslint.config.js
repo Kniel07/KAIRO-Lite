@@ -75,7 +75,20 @@ module.exports = [
     },
   },
   // Document 5 §20 (amended, Document 13 §4) — `ai/` never depends on
-  // `features/`; context retrieval reads via the Repository layer instead.
+  // `features/`' Services, Components, hooks, or actions; context
+  // retrieval reads via the Repository layer instead (`ai/context/` reads
+  // `features/*/repositories/**` directly per Document 5 §20's own text:
+  // "reads project, knowledge, and conversation data via the Repository
+  // layer... directly"). This mirrors the Services-boundary rule below,
+  // which is precise about *which* subpath is forbidden rather than
+  // blocking all of `features/**` — the original blanket
+  // `@/features/**` pattern here was stricter than Document 5 §20 actually
+  // specifies, and would have made Phase 5's Context Retrieval
+  // unimplementable, since every domain Repository (Project, Knowledge,
+  // Conversation, Message, Settings) is feature-owned (Document 13 §3,
+  // Amendment 2). Enforcement-only correction; no text change to
+  // Document 5 itself, whose prose already said this (Document 13 §24,
+  // Amendment 22, per the current ledger numbering).
   {
     files: ["ai/**/*.{ts,tsx}"],
     rules: {
@@ -84,9 +97,18 @@ module.exports = [
         {
           patterns: [
             {
-              group: ["@/features", "@/features/*", "@/features/**"],
+              group: [
+                "@/features/*/services/*",
+                "@/features/*/services/**",
+                "@/features/*/components/*",
+                "@/features/*/components/**",
+                "@/features/*/hooks/*",
+                "@/features/*/hooks/**",
+                "@/features/*/actions/*",
+                "@/features/*/actions/**",
+              ],
               message:
-                "ai/ must not depend on features/ (Document 5 §20, Document 13 §4). Read via a Repository instead.",
+                "ai/ must not depend on features/ Services, Components, hooks, or actions (Document 5 §20, Document 13 §4). Read via a feature-owned Repository instead.",
             },
           ],
         },

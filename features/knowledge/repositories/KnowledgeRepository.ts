@@ -24,6 +24,8 @@ export interface KnowledgeRepositoryLike extends Repository<
 > {
   findByProject(projectId: string, params?: FindManyParams): Promise<PagedResult<Knowledge>>;
   findByIdIncludingArchived(id: string): Promise<Knowledge | null>;
+  /** Document 4 §6 priority 5 — "Global Knowledge" (project-less entries). */
+  findGlobal(params?: FindManyParams): Promise<PagedResult<Knowledge>>;
 }
 
 // Constructor-injected `client` (Phase 3, transaction boundaries) — see
@@ -46,6 +48,16 @@ export class KnowledgeRepository implements KnowledgeRepositoryLike {
   /** KnowledgeService uses this for project-scoped listings. */
   async findByProject(projectId: string, params?: FindManyParams): Promise<PagedResult<Knowledge>> {
     const where = { projectId };
+    const [items, total] = await Promise.all([
+      this.client.knowledge.findMany({ where, ...toPagination(params) }),
+      this.client.knowledge.count({ where }),
+    ]);
+    return { items, total };
+  }
+
+  /** Document 4 §6 priority 5 — "Global Knowledge" (project-less entries). */
+  async findGlobal(params?: FindManyParams): Promise<PagedResult<Knowledge>> {
+    const where = { projectId: null };
     const [items, total] = await Promise.all([
       this.client.knowledge.findMany({ where, ...toPagination(params) }),
       this.client.knowledge.count({ where }),

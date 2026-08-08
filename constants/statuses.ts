@@ -17,6 +17,10 @@ export const NOTE_TYPES = ["IDEA", "REFERENCE", "JOURNAL", "TASK_DRAFT"] as cons
 export const NOTE_SOURCES = ["MANUAL", "AI", "IMPORT"] as const;
 export const DOCUMENT_TYPES = ["SPEC", "GUIDE", "ARCHITECTURE", "REPORT", "OTHER"] as const;
 
+// Document 4 §4 — the four AI Modes, sourced verbatim (Document 13 §7,
+// Amendment 6 — same source `types/ai.ts`'s `AIMode` already draws from).
+export const AI_MODES = ["THINK", "VALIDATE", "DOCUMENT", "IMPLEMENT"] as const;
+
 export type ProjectStatusValue = (typeof PROJECT_STATUSES)[number];
 export type ProjectPriorityValue = (typeof PROJECT_PRIORITIES)[number];
 export type ProjectVisibilityValue = (typeof PROJECT_VISIBILITIES)[number];
@@ -24,3 +28,4 @@ export type KnowledgeStatusValue = (typeof KNOWLEDGE_STATUSES)[number];
 export type NoteTypeValue = (typeof NOTE_TYPES)[number];
 export type NoteSourceValue = (typeof NOTE_SOURCES)[number];
 export type DocumentTypeValue = (typeof DOCUMENT_TYPES)[number];
+export type AIModeValue = (typeof AI_MODES)[number];

@@ -1,25 +1,59 @@
+import type { Knowledge, Message, Project, Settings } from "@/generated/prisma/client";
+import {
+  ProjectRepository,
+  type ProjectRepositoryLike,
+} from "@/features/projects/repositories/ProjectRepository";
+import {
+  KnowledgeRepository,
+  type KnowledgeRepositoryLike,
+} from "@/features/knowledge/repositories/KnowledgeRepository";
+import {
+  ConversationRepository,
+  type ConversationRepositoryLike,
+} from "@/features/ai/repositories/ConversationRepository";
+import {
+  MessageRepository,
+  type MessageRepositoryLike,
+} from "@/features/ai/repositories/MessageRepository";
+import {
+  SettingsRepository,
+  type SettingsRepositoryLike,
+} from "@/features/settings/repositories/SettingsRepository";
+import {
+  SearchRepository,
+  type SearchRepositoryLike,
+} from "@/lib/db/repositories/SearchRepository";
+import { ForbiddenError, NotFoundError } from "@/lib/utils/errors";
+
 // Document 4 §6 — Context Retrieval priority order (Active Project, Active
 // Document, Related Knowledge, Previous Conversation, Global Knowledge,
 // User Preferences). Document 13 §4 (Amendment 3) — this reads via the
 // Repository layer directly, never via Feature Services, keeping `ai/` and
 // `features/` dependency siblings (Document 5 §20).
-//
-// TODO(Document 10 §5; Phase 2 — Database): replace the `unknown` fields
-// below with the real Project/Knowledge/Conversation/Settings types once
-// those Prisma models exist.
 
 export interface AssembledContext {
-  project?: unknown;
-  relatedKnowledge: unknown[];
-  conversationHistory: unknown[];
-  globalKnowledge: unknown[];
-  userPreferences?: unknown;
+  /** Priority 1 — Active Project. */
+  project?: Project;
+  /** Priority 2 — Active Document: Knowledge explicitly referenced by
+   * `knowledgeIds`, included regardless of recency ranking (Doc 12 §4). */
+  activeKnowledge: Knowledge[];
+  /** Priority 3 — Related Knowledge, ranked via full-text search on the
+   * prompt (Doc 4 §11, Doc 12 §2 — "full-text ranked per Document 10 §8's
+   * search index"). */
+  relatedKnowledge: Knowledge[];
+  /** Priority 4 — Previous Conversation (last N messages, ascending). */
+  conversationHistory: Message[];
+  /** Priority 5 — Global Knowledge (project-less entries). */
+  globalKnowledge: Knowledge[];
+  /** Priority 6 — User Preferences. */
+  userPreferences?: Settings;
 }
 
 export interface ContextRetrieverParams {
   /** Document 13 §4 — ownership scoping is applied here, independently of
    * a Feature Service's authorization logic. */
   userId: string;
+  prompt: string;
   projectId?: string;
   conversationId?: string;
   knowledgeIds?: string[];
@@ -27,4 +61,115 @@ export interface ContextRetrieverParams {
 
 export interface ContextRetriever {
   retrieve(params: ContextRetrieverParams): Promise<AssembledContext>;
+}
+
+const RELATED_KNOWLEDGE_LIMIT = 5;
+const CONVERSATION_HISTORY_LIMIT = 10;
+const GLOBAL_KNOWLEDGE_LIMIT = 5;
+
+// Document 4 §6 / Document 13 §4 (Amendment 3) — the concrete
+// implementation `AIOrchestrator` is constructed with. Reads only; never
+// writes (Document 4 §2 "AI layer is NOT responsible for... Writing
+// directly to the database").
+export class RepositoryContextRetriever implements ContextRetriever {
+  constructor(
+    private readonly projectRepository: ProjectRepositoryLike = new ProjectRepository(),
+    private readonly knowledgeRepository: KnowledgeRepositoryLike = new KnowledgeRepository(),
+    private readonly conversationRepository: ConversationRepositoryLike = new ConversationRepository(),
+    private readonly messageRepository: MessageRepositoryLike = new MessageRepository(),
+    private readonly settingsRepository: SettingsRepositoryLike = new SettingsRepository(),
+    private readonly searchRepository: SearchRepositoryLike = new SearchRepository(),
+  ) {}
+
+  async retrieve(params: ContextRetrieverParams): Promise<AssembledContext> {
+    const [
+      project,
+      activeKnowledge,
+      relatedKnowledge,
+      conversationHistory,
+      globalKnowledge,
+      userPreferences,
+    ] = await Promise.all([
+      this.loadProject(params),
+      this.loadActiveKnowledge(params),
+      this.loadRelatedKnowledge(params),
+      this.loadConversationHistory(params),
+      this.loadGlobalKnowledge(),
+      this.loadUserPreferences(params),
+    ]);
+
+    return {
+      project,
+      activeKnowledge,
+      relatedKnowledge,
+      conversationHistory,
+      globalKnowledge,
+      userPreferences,
+    };
+  }
+
+  /** Doc 11 §7 ownership pattern — resource must belong to the caller. */
+  private async loadProject(params: ContextRetrieverParams): Promise<Project | undefined> {
+    if (!params.projectId) return undefined;
+    const project = await this.projectRepository.findById(params.projectId);
+    if (!project) {
+      throw new NotFoundError("PROJECT");
+    }
+    if (project.ownerId !== params.userId) {
+      throw new ForbiddenError("You do not have access to this project.");
+    }
+    return project;
+  }
+
+  private async loadActiveKnowledge(params: ContextRetrieverParams): Promise<Knowledge[]> {
+    if (!params.knowledgeIds?.length) return [];
+    const found = await Promise.all(
+      params.knowledgeIds.map((id) => this.knowledgeRepository.findById(id)),
+    );
+    return found.filter((entry): entry is Knowledge => entry !== null);
+  }
+
+  /** Doc 4 §11 / Doc 12 §2 — full-text ranked, avoiding prompt bloat by capping the result count. */
+  private async loadRelatedKnowledge(params: ContextRetrieverParams): Promise<Knowledge[]> {
+    if (!params.prompt.trim()) return [];
+    const { items } = await this.searchRepository.searchKnowledge({
+      query: params.prompt,
+      pageSize: RELATED_KNOWLEDGE_LIMIT,
+    });
+    const excludeIds = new Set(params.knowledgeIds ?? []);
+    const found = await Promise.all(
+      items
+        .filter((item) => !excludeIds.has(item.id))
+        .map((item) => this.knowledgeRepository.findById(item.id)),
+    );
+    return found.filter((entry): entry is Knowledge => entry !== null);
+  }
+
+  /** Doc 11 §7 ownership pattern applies to the conversation too. */
+  private async loadConversationHistory(params: ContextRetrieverParams): Promise<Message[]> {
+    if (!params.conversationId) return [];
+    const conversation = await this.conversationRepository.findById(params.conversationId);
+    if (!conversation) {
+      return [];
+    }
+    if (conversation.userId !== params.userId) {
+      throw new ForbiddenError("You do not have access to this conversation.");
+    }
+    const { items } = await this.messageRepository.findByConversation(params.conversationId, {
+      pageSize: CONVERSATION_HISTORY_LIMIT,
+    });
+    return items;
+  }
+
+  private async loadGlobalKnowledge(): Promise<Knowledge[]> {
+    const { items } = await this.knowledgeRepository.findGlobal({
+      pageSize: GLOBAL_KNOWLEDGE_LIMIT,
+    });
+    return items;
+  }
+
+  private async loadUserPreferences(params: ContextRetrieverParams): Promise<Settings | undefined> {
+    const settings = await this.settingsRepository.findByUserId(params.userId);
+    return settings ?? undefined;
+  }
 }

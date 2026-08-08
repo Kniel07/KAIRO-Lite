@@ -8,15 +8,24 @@ import type { FindManyParams, PagedResult, Repository } from "@/features/shared/
 // (AI Workspace / Document 8 §14a). Soft-delete exclusion is enforced by
 // `lib/db/soft-delete-extension.ts` (Phase 2 hardening review).
 //
+// Interface `AIChatService`/`RepositoryContextRetriever` depend on
+// (Document 7 §8) — see `ProjectRepositoryLike` for why this exists
+// alongside the generic shape. Added in Phase 5 when the first real
+// consumers arrived; the concrete class already matched this shape. A
+// type alias, not an `interface extends {}` (which ESLint's
+// `no-empty-object-type` correctly flags as pointless when the shape
+// doesn't add anything beyond the generic `Repository`).
+export type ConversationRepositoryLike = Repository<
+  Conversation,
+  Prisma.ConversationCreateInput,
+  Prisma.ConversationUpdateInput
+>;
+
 // Constructor-injected `client` (Phase 3, transaction boundaries) — see
 // `UserRepository` for the pattern this follows. Not used by any Phase 3
 // Service (AI Workspace is Phase 5) — refactored now for consistency so
 // every repository follows one pattern.
-export class ConversationRepository implements Repository<
-  Conversation,
-  Prisma.ConversationCreateInput,
-  Prisma.ConversationUpdateInput
-> {
+export class ConversationRepository implements ConversationRepositoryLike {
   constructor(private readonly client: Db = prisma) {}
 
   async findById(id: string): Promise<Conversation | null> {

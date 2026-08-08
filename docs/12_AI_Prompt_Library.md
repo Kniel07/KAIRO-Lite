@@ -2,7 +2,7 @@
 ## AI Prompt Library
 
 Version: 1.0
-Status: Proposed (Amendment — pending approval)
+Status: Applied — all five templates (THINK/VALIDATE/DOCUMENT/IMPLEMENT Stage 1/Stage 2) implemented verbatim in `ai/prompts/templates.ts`, with matching `.strict()` Zod validation in `ai/schemas/ModeOutputSchemas.ts`, during Phase 5 (Document 13 §25, Amendment 23). Document 8 §23 already referenced this document as authoritative before this status change — the "Proposed" marker was stale, not a real open question. <!-- Amended -->
 Extends: Document 4 (AI Architecture) §4 "AI Modes" and §8 "Prompt Templates"
 
 ---

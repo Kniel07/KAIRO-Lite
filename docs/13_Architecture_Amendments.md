@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Architecture Amendments
 
-Version: 1.7 (applied)
+Version: 1.8 (applied)
 Status: Applied — approved by the project owner. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been updated in place to reflect every amendment below.
 
 ---
@@ -333,7 +333,40 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 
 ---
 
-# 24. Amendment Ledger Summary
+# 24. Amendment 22 — `ai/` ESLint Boundary Correction (Phase 5)
+
+**Problem:** Document 5 §20's text says `ai/context/` "reads project, knowledge, and conversation data via the Repository layer... directly — never via Feature Services," which requires it to import from `features/*/repositories/**` (every domain Repository — Project, Knowledge, Conversation, Message, Settings — is feature-owned per Document 13 §3, Amendment 2). The `eslint.config.js` rule enforcing this instead blocked all of `@/features/**` from `ai/**`, with no carve-out for repositories. Attempting to implement `RepositoryContextRetriever` (Phase 5) against the actual constitution surfaced the contradiction directly — the documented architecture was unimplementable under the enforced rule.
+
+**Chosen Solution:** Narrowed the `ai/**` restricted-imports rule from blocking `@/features/**` entirely to blocking only `@/features/*/services/**`, `@/features/*/components/**`, `@/features/*/hooks/**`, and `@/features/*/actions/**` — mirroring the precision the analogous Components/pages → Services rule already uses (that rule blocks `@/features/*/services/*` specifically, not all of `features/**`, so Route Handlers can still reach it). This makes the enforcement match what Document 5 §20's prose already specified; no text change to Document 5 itself.
+
+**Consistency Rationale:** This is a mechanical correction of an over-broad ESLint pattern, not a new architectural decision — the constitution already said Repositories were fair game for `ai/context/`, only the lint rule disagreed. Blocking Services/Components/hooks/actions still fully prevents `ai/` from depending on business logic or UI code, which was the rule's actual intent.
+
+**Applied text change:** None to Document 5. `eslint.config.js` updated in place (not a `docs/` file, but recorded here per this document's own stated purpose of being where every constitutional-adjacent change is traceable from).
+
+---
+
+# 25. Amendment 23 — Phase 5 AI Layer Architecture
+
+**Problem:** Document 4/Document 12 specify the AI Layer's architecture and prompt contracts in detail, but several concrete implementation choices were left to Phase 5, same as every prior phase: how the Route Handler avoids importing a concrete provider while still "delegating to the AI Orchestrator" (Doc 8 §14), how response validation mechanically enforces Document 12 §7's "role compliance" check, how "Global Knowledge" (Doc 4 §6 priority 5) is fetched when no existing Repository method covered it, and how the AI-specific request flow (Doc 8 §2, no Service node) reconciles with "AI-assisted modifications generate audit entries" (Doc 8 §21) when the Orchestrator itself is forbidden from writing to the database (Doc 4 §2).
+
+**Chosen Solution:**
+- **`createAIOrchestrator()` factory** (`ai/orchestrator/AIOrchestrator.ts`): the Route Handler calls this instead of constructing `OpenAIProvider`/`RepositoryContextRetriever` itself, so `app/api/v1/ai/chat/route.ts` never imports `@/ai/providers` at all — the existing ESLint rule blocking that import from every `app/**` file (Document 5 §5, no `app/api/**` exemption) is satisfied without weakening it, and "No UI component or API route may communicate directly with an LLM" (Doc 4 §3) holds structurally, not just by convention.
+- **Response validation via `.strict()` Zod schemas** (`ai/schemas/ModeOutputSchemas.ts`): Document 12 §7 check 5 ("role compliance... cross-mode leakage is treated as a schema failure") is enforced mechanically — `.strict()` rejects any key the schema doesn't declare, so a THINK response smuggling a `files` field fails validation the same way a missing required field would, with no separate leakage-detection logic needed.
+- **`response_format: { type: "json_object" }`** set unconditionally inside `OpenAIProvider.chat()` (not added to the provider-agnostic `AIChatRequest`, which stays exactly as Document 4 §7 specifies it: `messages`/`model`/`temperature`) — every mode's system prompt already instructs JSON-only output, and this is a reliability improvement layered on top of, not a substitute for, the Zod validation that remains the authoritative check.
+- **`KnowledgeRepository.findGlobal()`** — added (mirrors the existing `findByProject`) because Document 4 §6 priority 5, "Global Knowledge" (project-less entries), had no existing Repository method to read it with. A mechanical gap-fill, not a new business rule.
+- **`ConversationRepositoryLike`/`MessageRepositoryLike` interfaces** — added to `features/ai/repositories/` (the concrete classes already matched this shape from Phase 2/3; Phase 5 is when the first real consumers — `RepositoryContextRetriever`, `AIChatService` — arrived and needed the DI-friendly interface every other Repository already has).
+- **`CONVERSATION` added to `NotFoundEntity`** (`lib/utils/errors.ts`) — the same extensible union `NOTE` was added to in Phase 3, now covering the one entity Phase 5 introduces that can 404.
+- **`AIChatService`** (`features/ai/services/AIChatService.ts`) — an ordinary Service (normal Component → Route Handler → Service → Repository → Prisma chain, Doc 7 §8), called by the Route Handler *after* `AIOrchestrator.execute()` succeeds, to persist the Conversation/Message rows and audit entry Document 8 §21 requires for "AI-assisted modifications." This is how Document 8 §2's AI-specific flow diagram (no Service node between Route Handler and Orchestrator) coexists with Document 4 §2's "AI layer is NOT responsible for... Writing directly to the database": the Orchestrator's flow and the persistence flow are two separate, sibling Route Handler calls, not one blended one.
+- **Embeddings intentionally left unimplemented** in `OpenAIProvider` — Document 9's Phase 5 authorization explicitly excludes "Embeddings"/"Vector search" (Document 9 Phase 9 reserves them); the method still exists (Document 4 §7's provider interface requires it) but throws, and nothing in the Phase 5 pipeline calls it.
+- **Document 12's status corrected** from "Proposed (Amendment — pending approval)" to "Applied" — Document 8 §23 already referenced Document 12 §6 as authoritative before this phase began, so the "pending approval" marker was stale, not a live open question; this phase's implementation is what made the staleness worth fixing.
+
+**Consistency Rationale:** Every choice above either fills a gap the constitution already anticipated (Global Knowledge, the persistence Service, the `NotFoundEntity` extension pattern) or enforces existing text more precisely (the factory function, `.strict()` schemas) — none introduce a new layer, a new dependency direction, or a capability outside Document 9 Phase 5's explicit scope.
+
+**Applied text change:** Document 9, Phase 5 — Deliverables and Exit Criteria rewritten to describe the actual implementation and its verification (live request trace, 122 passing unit tests). Document 12 — status changed from Proposed to Applied (no text/prompt changes — the five templates were implemented verbatim).
+
+---
+
+# 26. Amendment Ledger Summary
 
 | # | Topic | Affected Document(s) | Status |
 |---|---|---|---|
@@ -359,8 +392,10 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 | 19 | Component/page → Service boundary enforcement | Doc 7 §8 (enforcement only, no text change) | Applied |
 | 20 | Phase 4 frontend architecture (SettingsService gap-fill, client data fetching, no new UI dependencies, MarkdownEditor reuse) | Doc 8 §15, Doc 9 Phase 4 | Applied |
 | 21 | Phase 4 UX corrections (route group fix, responsive sidebar, ConfirmDialog, Search result routing, Project cross-navigation, truncation notice, Documents table consistency, required-field indicators) | Doc 9 Phase 4 | Applied |
+| 22 | `ai/` ESLint boundary correction (enforcement only, no text change) | eslint.config.js | Applied |
+| 23 | Phase 5 AI Layer architecture (Orchestrator factory, `.strict()` response validation, `findGlobal`, `AIChatService` persistence, embeddings exclusion, Document 12 status correction) | Doc 9 Phase 5, Doc 12 | Applied |
 
-All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint; Amendment 18 originated from the Phase 3 implementation itself; Amendment 19 originated from the Document 14 Revision 3 pre-Phase-4 audit; Amendment 20 originated from the Phase 4 implementation itself; Amendment 21 originated from the read-only Pre-Phase-5 UX Review, which found Phase 4's "Full navigation operational" exit criterion was not actually met and reopened Phase 4 for correction before Phase 5 was authorized. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
+All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, and 12 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint; Amendment 18 originated from the Phase 3 implementation itself; Amendment 19 originated from the Document 14 Revision 3 pre-Phase-4 audit; Amendment 20 originated from the Phase 4 implementation itself; Amendment 21 originated from the read-only Pre-Phase-5 UX Review, which found Phase 4's "Full navigation operational" exit criterion was not actually met and reopened Phase 4 for correction before Phase 5 was authorized; Amendments 22–23 originated from the Phase 5 implementation itself. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
 
 ---
 

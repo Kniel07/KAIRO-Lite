@@ -68,6 +68,7 @@ function makeFakeRepositories() {
     findById: vi.fn(),
     findByProject: vi.fn(),
     findByIdIncludingArchived: vi.fn(),
+    findGlobal: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),

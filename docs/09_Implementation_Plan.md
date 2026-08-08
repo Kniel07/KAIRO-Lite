@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Implementation Plan
 
-Version: 1.3 (amended)
+Version: 1.4 (amended)
 Status: Approved
 
 ---
@@ -234,14 +234,14 @@ Implement the AI architecture.
 
 Deliverables
 
-- AI Orchestrator
-- Provider interface
-- OpenAI provider
-- Prompt builder
-- Context retrieval (reads via Repository layer — Document 13 §4, Amendment 3)
-- Prompt templates (Document 12)
-- Response validation
-- AI API
+- AI Orchestrator (`ai/orchestrator/AIOrchestrator.ts`) — `execute()` implemented: Context Retrieval → Prompt Builder → Provider → Response Validation, per Document 4 §3's flow. Exposes `createAIOrchestrator()`, the one factory that constructs the default provider + context retriever, so `app/api/v1/ai/chat/route.ts` never imports a concrete provider itself (Document 5 §5) <!-- Amended -->
+- Provider interface (`ai/providers/AIProvider.ts`) — unchanged from the Phase 0/1 scaffold (Document 4 §7's fixed `chat`/`stream`/`embeddings`/`health` shape)
+- OpenAI provider (`ai/providers/OpenAIProvider.ts`) — `chat`/`stream`/`health` wired to the `openai` SDK; `embeddings` deliberately left unimplemented (Phase 5's explicit "Do NOT implement: ... Embeddings" scope, Document 9 Phase 9 reserves it) even though the interface still declares the method <!-- Amended -->
+- Prompt builder (`ai/prompts/PromptBuilder.ts`) — assembles the mode's system prompt + a JSON-Schema description of its output shape + only the non-empty assembled-context sections (Document 4 §6 "avoid prompt bloat") + the user prompt <!-- Amended -->
+- Context retrieval (`ai/context/ContextRetriever.ts`'s `RepositoryContextRetriever`, reads via the Repository layer — Document 13 §4, Amendment 3) — implements all six Document 4 §6 priorities: Active Project, Active Document (explicit `knowledgeIds`), Related Knowledge (full-text ranked via `SearchRepository`), Previous Conversation, Global Knowledge (`KnowledgeRepository.findGlobal`, added for this), User Preferences. Ownership scoping applied independently for `projectId`/`conversationId` <!-- Amended -->
+- Prompt templates (Document 12) — `ai/prompts/templates.ts`, all five templates (THINK/VALIDATE/DOCUMENT/IMPLEMENT Stage 1/Stage 2) sourced verbatim, version `1.0`
+- Response validation — `ai/schemas/ModeOutputSchemas.ts`, one `.strict()` Zod schema per mode (+ IMPLEMENT's two stages); `.strict()` is what enforces Document 12 §7's "role compliance" check (cross-mode leakage, e.g. a THINK response containing `files`, fails as an unrecognized key)
+- AI API — `POST /api/v1/ai/chat` (Document 8 §14). The Route Handler validates the request, calls `AIOrchestrator.execute()` directly ("the route handler delegates to the AI Orchestrator" — Doc 8 §14), then calls the new `AIChatService` (`features/ai/services/AIChatService.ts`) to persist the Conversation/Message turn and its audit entry — an ordinary Component → Route Handler → Service → Repository → Prisma call made *after* the Orchestrator's response has already passed validation, since the Orchestrator itself never writes to the database (Document 4 §2) <!-- Amended -->
 
 Modes
 
@@ -252,7 +252,7 @@ Modes
 
 Exit Criteria
 
-✓ AI requests execute through Orchestrator only
+✓ AI requests execute through Orchestrator only — `app/api/v1/ai/chat/route.ts` is the only Route Handler that touches `ai/` at all, and only via `createAIOrchestrator()`; verified by the ESLint boundary (`no-restricted-imports` blocks `@/ai/providers/**` from every other `app/**`/`components/**` file) and by a live end-to-end request trace (session-cookie auth) through auth → Zod validation → `AIOrchestrator.execute` → `RepositoryContextRetriever` (confirmed via a real 404 `PROJECT_NOT_FOUND` for a nonexistent `projectId`, proving the ownership/existence check actually runs) → `PromptBuilder` → `OpenAIProvider.chat()`, which reached a real outbound HTTPS attempt to `api.openai.com` before failing on this environment's network egress allowlist (not a code defect — `OPENAI_API_KEY` is a dev placeholder here, same limitation Phase 4 documented for magic-link email delivery). 122 unit tests (39 new) cover `AIOrchestrator` per-mode validation (including cross-mode leakage rejection and the IMPLEMENT Stage 1/Stage 2 gate), `RepositoryContextRetriever`'s six-priority assembly and ownership checks, `PromptBuilder`'s context-omission behavior, and `AIChatService`'s persistence/audit/ownership logic. <!-- Amended -->
 
 ---
 
