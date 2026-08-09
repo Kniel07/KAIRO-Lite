@@ -18,8 +18,27 @@ import { softDeleteExtension } from "@/lib/db/soft-delete-extension";
 // infrastructure layer (see `lib/db/soft-delete-extension.ts`) — every
 // caller of `prisma`, present and future, gets it automatically.
 
+// Document 15 DEBT-008 / RC Review finding DB2 — previously a bare
+// `{ connectionString }` with no explicit pool size, meaning Vercel's
+// per-invocation connection behavior was whatever `pg.Pool`'s defaults
+// happened to do under serverless concurrency, untested. Now that Vercel +
+// Neon is the confirmed production target (Pre-Deployment Hardening pass):
+// Neon's own pooled connection endpoint (the `-pooler` hostname suffix,
+// PgBouncer-backed) is what actually absorbs concurrent serverless
+// invocations — `DATABASE_URL` should point at that endpoint in production
+// (documented in Document 17). This `max` is a second, smaller safety
+// margin *within* a single running instance (a warm Vercel function
+// reusing this module-level client across invocations, or a persistent
+// `next start` process in development) — kept low deliberately so this
+// process alone can never open enough connections to matter, regardless of
+// how many instances Vercel runs concurrently.
+const POOL_MAX_CONNECTIONS = 5;
+
 function createPrismaClient() {
-  const adapter = new PrismaPg({ connectionString: databaseConfig.url });
+  const adapter = new PrismaPg({
+    connectionString: databaseConfig.url,
+    max: POOL_MAX_CONNECTIONS,
+  });
   return new PrismaClient({ adapter }).$extends(softDeleteExtension);
 }
 

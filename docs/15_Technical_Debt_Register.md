@@ -58,6 +58,8 @@ Sorted by planned phase (Document 9).
 
 ## DEBT-003 — `searchVector` lives outside the Prisma schema, creating migration-drift risk
 
+**Status: closed (Pre-Deployment Hardening pass, Document 13 §29 Amendment 27).** The exit criteria below is met — the procedure now lives in Document 10 §8a: always `prisma migrate dev --create-only`, manually review the generated SQL for an unexpected `DROP COLUMN "searchVector"` before applying, every time. This had already missed its own documented deadline (Document 16 named it as required "before Beta, not during it") — closed now, later than intended, but closed with the exact shape this entry always described.
+
 | Field | Value |
 |---|---|
 | **Description** | The Knowledge full-text search column (`searchVector`, a generated `tsvector` column + GIN index, Document 10 §8) is raw SQL appended to the migration file — it is not declarable in `schema.prisma` (Prisma has no native Postgres `tsvector`/generated-column support). This isn't a preference; it's a real limitation I hit directly: running `prisma migrate dev` again after adding it triggered a shadow-database drift prompt, because Prisma's diffing engine sees a database column `schema.prisma` doesn't know about and wants to reconcile it. I killed that interactive prompt rather than let an AI-invoked migration decision run unsupervised. |
@@ -102,6 +104,8 @@ Sorted by planned phase (Document 9).
 
 ## DEBT-006 — Structured logger has no log levels, sinks, or correlation IDs beyond `console`
 
+**Status: still open, decision recorded (Pre-Deployment Hardening pass, Document 13 §29 Amendment 27).** Document 17 §7 records the explicit decision to rely on Vercel's platform log capture initially — the "documented decision that console output piped through the hosting platform's own log capture is sufficient" branch of this entry's own exit criteria — satisfying that one clause. Log level configuration and correlation IDs remain unimplemented; not closing this entry, since the harder half of the original criteria is still outstanding.
+
 | Field | Value |
 |---|---|
 | **Description** | `lib/logger/index.ts` (Document 7 §12) writes structured JSON to `console.log`/`warn`/`error`. It has no configurable log level (everything is emitted), no external sink (e.g. a log aggregation service), and no request-correlation ID threading requests through multiple log lines. |
@@ -115,6 +119,8 @@ Sorted by planned phase (Document 9).
 ---
 
 ## DEBT-007 — Environment validation doesn't vary by `NODE_ENV`
+
+**Status: closed (Pre-Deployment Hardening pass, Document 13 §29 Amendment 27).** `config/env.ts` gained a `superRefine` requiring, only when `NODE_ENV === "production"`: `AUTH_URL` to start with `https://`, and the new `EMAIL_FROM` variable (RC Review finding RC1) to be present. Exit criteria met as originally specified.
 
 | Field | Value |
 |---|---|
@@ -130,6 +136,8 @@ Sorted by planned phase (Document 9).
 
 ## DEBT-008 — No database connection retry/backoff for transient failures
 
+**Status: partially closed (Pre-Deployment Hardening pass, Document 13 §29 Amendment 27).** The hosting decision this entry's exit criteria was waiting on is now made — Vercel + Neon (Document 17 §2) — and `lib/db/client.ts`'s `PrismaPg` adapter now takes an explicit `max: 5` pool-size cap, closing the "no explicit pool size limit" half of this entry. Still open: retry/backoff for transient connection failures, and Neon's own pooled `-pooler` connection endpoint (Document 17 §3-4) needs to actually be used as `DATABASE_URL` at deploy time — a deployment-execution step, not something this repository's code can guarantee on its own.
+
 | Field | Value |
 |---|---|
 | **Description** | `lib/db/client.ts` constructs a bare `pg.Pool` via `@prisma/adapter-pg` with default settings — no explicit pool size limit, no retry/backoff policy for transient connection failures (e.g. a brief network blip or database restart). |
@@ -138,7 +146,7 @@ Sorted by planned phase (Document 9).
 | **Impact if unaddressed** | Under real concurrent serverless load, connection exhaustion or unhandled transient failures could cause request failures that a properly configured pool/retry policy would absorb. |
 | **Planned phase** | Phase 8 (Deployment) — this is exactly the "confirm Postgres hosting/pooling strategy" question the original Ingestion Report raised and left as the one open item after the constitution was otherwise finalized. |
 | **Owner** | Project owner. |
-| **Exit criteria** | A concrete decision on hosting (Vercel Postgres / Neon / Supabase, per the original ingestion report's Q12) drives an explicit pool size configuration and, if the chosen host benefits from it, a switch to a serverless-aware driver (e.g. Neon's serverless driver) or a pooling proxy (PgBouncer / Prisma Accelerate) instead of a bare `pg.Pool`. |
+| **Exit criteria** | ~~A concrete decision on hosting (Vercel Postgres / Neon / Supabase, per the original ingestion report's Q12) drives an explicit pool size configuration~~ — done: Neon chosen, `max: 5` set. Remaining: retry/backoff policy for transient connection failures, and confirming Neon's pooled `-pooler` endpoint is the actual `DATABASE_URL` used in production (Document 17 §3-4). |
 
 ---
 

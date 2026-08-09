@@ -24,11 +24,19 @@ jobs:
     # job override DATABASE_URL to point at the `postgres` service
     # container below instead (Document 13 §28, Amendment 26, Phase 7.5 —
     # Phase 7 QA Report finding Q1).
+    #
+    # `next build` always runs with NODE_ENV=production internally
+    # (independent of any other NODE_ENV setting), which since Document 13
+    # §29 (Amendment 27) means `config/env.ts` enforces the production-only
+    # AUTH_URL/EMAIL_FROM checks on every build, including this CI one —
+    # AUTH_URL and EMAIL_FROM below are shaped like real production values
+    # for that reason, not because this is a real deployment.
     env:
       DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
       AUTH_SECRET: "ci-only-dummy-secret-not-a-real-credential"
-      AUTH_URL: "http://localhost:3000"
+      AUTH_URL: "https://ci.example.com"
       RESEND_API_KEY: "ci-only-dummy-key"
+      EMAIL_FROM: "KAIRO-Lite <ci@example.com>"
       KAIRO_OWNER_EMAIL: "ci@example.com"
       OPENAI_API_KEY: "ci-only-dummy-key"
 

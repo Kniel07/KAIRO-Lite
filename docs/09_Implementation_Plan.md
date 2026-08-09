@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Implementation Plan
 
-Version: 1.7 (amended)
+Version: 1.8 (amended)
 Status: Approved
 
 ---
@@ -329,9 +329,11 @@ Deliverables
 - Monitoring
 - Error reporting
 
+A read-only Release Candidate (RC) Review, requested after Phase 7.5, checked these deliverables against Document 16's own pre-existing RC exit criteria and found hosting, database provider, backup strategy, and monitoring entirely undecided — not partially built. The project owner made the outstanding platform decisions directly: **Vercel** (hosting), **Neon** (Postgres, serverless-native — closes Document 15 DEBT-008's connection-pooling gap), and **monitoring deferred** (Sentry named as the intended choice, explicitly not installed yet — "add it during Phase 8, or immediately after deployment"). A Pre-Deployment Hardening pass then closed the decision-independent and now-unblocked items: `config/env.ts` gained production-only enforcement of `AUTH_URL` (must be `https://`) and a new required `EMAIL_FROM` variable (closing Document 15 DEBT-007); `lib/db/client.ts` gained explicit connection-pool sizing (closing half of DEBT-008); the `searchVector` migration-safety procedure Document 16 had named as a missed Beta-milestone deadline was finally written, into new Document 10 §8a (closing DEBT-003); and a new Document 17 (Deployment & Operations Runbook) now holds the environment-variable checklist, migration procedure cross-reference, Neon-PITR backup/restore strategy, a two-mechanism rollback procedure (deploy vs. migration), the monitoring/logging decision record, cost-control setup steps, and a release checklist. Document 13 §29 (Amendment 27) records the pass. None of this is itself a production deployment — "Vercel configuration," "Environment variables," and "Production database" above are now *decided and documented*, not yet *executed* (no Vercel/Neon project has actually been created). <!-- Amended -->
+
 Exit Criteria
 
-✓ Successful production deployment
+✓ Successful production deployment — not yet met. The platform decisions and pre-deployment hardening above are prerequisites this exit criterion depends on, now satisfied; actual deployment execution (creating the Vercel/Neon projects, setting production environment variables, running the first `prisma migrate deploy` against a real production database, and verifying the Release Checklist in Document 17 §9) has not yet happened. <!-- Amended -->
 
 ---
 

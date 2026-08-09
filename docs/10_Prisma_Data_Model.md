@@ -351,6 +351,21 @@ Per Doc 3 §10 (PK, FK, slug, status, created/updated date, full-text columns, f
 
 The full-text GIN index is the concrete mechanism satisfying Doc 3 §10's "full-text search columns" and backs the MVP Search API resolution in Document 13 §1 — no separate search-index table is introduced.
 
+## 8a. `searchVector` Migration Safety Procedure
+
+Closes Document 15 DEBT-003's exit criteria, recorded during the Pre-Deployment Hardening pass ahead of Phase 8.
+
+**The risk this procedure guards against:** `Knowledge.searchVector` (a generated `tsvector` column + its GIN index, referenced in the table above) is raw SQL appended directly to a migration file — it is not declarable in `schema.prisma`, since Prisma has no native support for Postgres generated columns or `tsvector`. Because `schema.prisma` doesn't know this column exists, Prisma's migration-diffing engine sees a real database column it can't account for and will offer to "fix" the drift — which means a normal `prisma migrate dev` run, at any point in the future, can silently generate a migration that `DROP COLUMN "searchVector"`. If that migration is accepted (by a human clicking through the interactive prompt, or an AI agent running it unsupervised), full-text search breaks with no application error — Search simply returns empty results until someone notices.
+
+**The procedure, required for every future schema change:**
+
+1. Never run `prisma migrate dev` directly against a database that already has `searchVector` applied. Always run `prisma migrate dev --create-only` first.
+2. Open the generated migration SQL file before applying it. Confirm it does **not** contain `DROP COLUMN "searchVector"` or any statement touching the `knowledge` table's generated column or its GIN index. If it does, delete that statement from the generated file — Prisma's drift-correction guess is wrong here by construction, not by mistake.
+3. Only after that manual review, run `prisma migrate deploy` (production) or apply the reviewed file via `prisma migrate dev` (development) to actually apply it.
+4. This applies identically regardless of hosting/database provider (Neon, Vercel Postgres, or local) — the risk is in Prisma's schema-diffing model, not in any particular Postgres host.
+
+**Verification that this procedure is sufficient:** `prisma migrate deploy` (which never diffs or generates new migrations, only applies already-reviewed ones in order) was live-verified against the dev database during Phase 7.5 and reported "No pending migrations to apply" — confirming the *deploy* path is inherently safe. The risk this procedure addresses is specifically the *dev/diff* path (`prisma migrate dev` without `--create-only`), which is why step 1 is the load-bearing rule.
+
 ---
 
 # 9. Many-to-Many Relations Summary

@@ -67,6 +67,47 @@ describe("config/env", () => {
     );
   });
 
+  it("allows a plain http:// AUTH_URL outside production", async () => {
+    process.env = { ...VALID_ENV, NODE_ENV: "development", AUTH_URL: "http://localhost:3000" };
+    const { env } = await import("@/config/env");
+    expect(env.AUTH_URL).toBe("http://localhost:3000");
+  });
+
+  it("throws when AUTH_URL is not https:// in production", async () => {
+    process.env = {
+      ...VALID_ENV,
+      NODE_ENV: "production",
+      AUTH_URL: "http://example.com",
+      EMAIL_FROM: "KAIRO-Lite <noreply@example.com>",
+    };
+    await expect(import("@/config/env")).rejects.toThrow(/AUTH_URL/);
+  });
+
+  it("throws when EMAIL_FROM is missing in production", async () => {
+    process.env = { ...VALID_ENV, NODE_ENV: "production", AUTH_URL: "https://example.com" };
+    delete process.env.EMAIL_FROM;
+    await expect(import("@/config/env")).rejects.toThrow(/EMAIL_FROM/);
+  });
+
+  it("allows a missing EMAIL_FROM outside production", async () => {
+    process.env = { ...VALID_ENV, NODE_ENV: "test" };
+    delete process.env.EMAIL_FROM;
+    const { env } = await import("@/config/env");
+    expect(env.EMAIL_FROM).toBeUndefined();
+  });
+
+  it("succeeds in production with https:// AUTH_URL and EMAIL_FROM set", async () => {
+    process.env = {
+      ...VALID_ENV,
+      NODE_ENV: "production",
+      AUTH_URL: "https://kairo-lite.example.com",
+      EMAIL_FROM: "KAIRO-Lite <noreply@example.com>",
+    };
+    const { env } = await import("@/config/env");
+    expect(env.AUTH_URL).toBe("https://kairo-lite.example.com");
+    expect(env.EMAIL_FROM).toBe("KAIRO-Lite <noreply@example.com>");
+  });
+
   it("never includes secret values in the thrown error message (Document 7 §12)", async () => {
     process.env.AUTH_SECRET = "super-secret-value-that-must-never-leak";
     delete process.env.OPENAI_API_KEY;
