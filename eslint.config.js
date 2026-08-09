@@ -155,8 +155,11 @@ module.exports = [
     // `config/env.ts`'s validation behavior and must mutate `process.env`
     // directly to set up each fixture. A narrow, documented exception, not
     // a hole: it's the one file whose entire job is exercising this rule's
-    // subject.
-    ignores: ["config/env.ts", "prisma.config.ts", "tests/unit/env.test.ts"],
+    // subject. `next.config.ts` joins `prisma.config.ts` for the same
+    // reason (Document 13 §28, Amendment 26, Phase 7.5): both run before
+    // the app's own module graph exists, so `@/config/env` isn't reachable
+    // from them yet.
+    ignores: ["config/env.ts", "prisma.config.ts", "next.config.ts", "tests/unit/env.test.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",

@@ -25,6 +25,7 @@ import { NotFoundError, UnknownError, ValidationError } from "@/lib/utils/errors
 import type { FindManyParams, PagedResult } from "@/features/shared/types/Repository";
 import type { ServiceContext } from "@/features/shared/types/Service";
 import { assertProjectOwnership } from "@/features/shared/services/assertProjectOwnership";
+import { sanitizeMarkdown } from "@/lib/markdown";
 
 // Document 10 §5.12 config-table key this Service reads to police the
 // open-ended `Knowledge.category` taxonomy (Document 13 §4 Amendment 4,
@@ -93,7 +94,13 @@ export class KnowledgeService {
       const knowledge = await knowledgeRepository.create({
         title: input.title,
         summary: input.summary,
-        markdown: input.markdown,
+        // Document 7 §21 / Document 13 §28 (Amendment 26, Phase 7.5) —
+        // write-time sanitization (Phase 7 Security Report finding S3):
+        // strips raw HTML pass-through in the Markdown *source* before it
+        // is persisted, independent of and in addition to
+        // `renderMarkdown()`'s read-time sanitization in the Preview tab —
+        // either layer failing alone still leaves the other in place.
+        markdown: sanitizeMarkdown(input.markdown),
         category: input.category,
         confidence: input.confidence,
         status: input.status,
@@ -133,7 +140,7 @@ export class KnowledgeService {
       const knowledge = await knowledgeRepository.update(id, {
         ...(input.title !== undefined ? { title: input.title } : {}),
         ...(input.summary !== undefined ? { summary: input.summary } : {}),
-        ...(input.markdown !== undefined ? { markdown: input.markdown } : {}),
+        ...(input.markdown !== undefined ? { markdown: sanitizeMarkdown(input.markdown) } : {}),
         ...(input.category !== undefined ? { category: input.category } : {}),
         ...(input.confidence !== undefined ? { confidence: input.confidence } : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),

@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Implementation Plan
 
-Version: 1.6 (amended)
+Version: 1.7 (amended)
 Status: Approved
 
 ---
@@ -282,7 +282,7 @@ Future
 - Embeddings
 - Knowledge graph
 
-These remain explicitly out of MVP scope — Document 9 Phase 9 lists "Embeddings" and "Vector Search" by name as "intentionally excluded from MVP," and Documents 1 §9, 3 §11, 4 §14, and 8 §13 all independently treat them as post-MVP. When Phase 6 was authorized, the initial framing ("Knowledge Intelligence" = embeddings infrastructure, vector storage, hybrid retrieval) conflicted with this directly; the project owner corrected the authorization to stay inside the existing MVP boundary rather than amend five documents to match an initial recommendation. The corrected Phase 6 scope — Document 13 §28 (Amendment 25) — improved retrieval quality within PostgreSQL full-text search instead: `SearchRepository` gained `searchKnowledgeForContext`, implementing two of Document 4 §11's non-semantic ranking signals that were never wired up (Active-Project affinity, Recency decay) and eliminating an N+1 query pattern (`RepositoryContextRetriever`'s "Related Knowledge" step previously ran a search then one `findById` per result); `AIOrchestratorResponse.citations` became structured (`{id, title, reason, rank?}`) instead of bare ids, so a response can show *why* each citation was included; Related and Global Knowledge are now deduped against each other before reaching the prompt. `SearchService`/the Search page's existing `searchKnowledge` method was not touched. <!-- Amended -->
+These remain explicitly out of MVP scope — Document 9 Phase 9 lists "Embeddings" and "Vector Search" by name as "intentionally excluded from MVP," and Documents 1 §9, 3 §11, 4 §14, and 8 §13 all independently treat them as post-MVP. When Phase 6 was authorized, the initial framing ("Knowledge Intelligence" = embeddings infrastructure, vector storage, hybrid retrieval) conflicted with this directly; the project owner corrected the authorization to stay inside the existing MVP boundary rather than amend five documents to match an initial recommendation. The corrected Phase 6 scope — Document 13 §27 (Amendment 25) — improved retrieval quality within PostgreSQL full-text search instead: `SearchRepository` gained `searchKnowledgeForContext`, implementing two of Document 4 §11's non-semantic ranking signals that were never wired up (Active-Project affinity, Recency decay) and eliminating an N+1 query pattern (`RepositoryContextRetriever`'s "Related Knowledge" step previously ran a search then one `findById` per result); `AIOrchestratorResponse.citations` became structured (`{id, title, reason, rank?}`) instead of bare ids, so a response can show *why* each citation was included; Related and Global Knowledge are now deduped against each other before reaching the prompt. `SearchService`/the Search page's existing `searchKnowledge` method was not touched. <!-- Amended -->
 
 Exit Criteria
 
@@ -308,7 +308,9 @@ Deliverables
 
 Exit Criteria
 
-✓ All critical paths tested
+✓ All critical paths tested — a read-only Phase 7 QA & Production Readiness Audit (six reports: QA, Performance, Accessibility, Security, Production Readiness, Remaining Issues) covered every deliverable above: unit tests (150 passing), a live end-to-end + accessibility pass (axe-core 4.13.0, WCAG2A/AA, 0 violations across all 7 authenticated pages), a performance review (indexing, pagination bounds, N+1 elimination confirmed intact from Phase 6), a security review (authorization/authN coverage, SQL injection, XSS/markdown sanitization, secrets handling, `npm audit`), and a documentation review. No CRITICAL and no architectural findings — every finding was an implementation gap within already-approved architecture. <!-- Amended -->
+
+The audit found six real gaps worth closing before Phase 8: no security headers, no rate limiting on the AI endpoint, write-time markdown sanitization present but unwired, no health-check endpoint, three HIGH-severity transitive dependency vulnerabilities, and CI never running against a live database. The project owner approved the audit and authorized a narrowly-scoped **Phase 7.5 — Production Hardening** pass closing five of the six directly and recording a risk-acceptance decision for the sixth: `next.config.ts` now sends `Content-Security-Policy`/`X-Frame-Options`/`X-Content-Type-Options`/`Referrer-Policy` on every response (plus HSTS in production); `POST /api/v1/ai/chat` is now rate-limited (20 requests/60s per user, `lib/rate-limit/RateLimiter.ts`); `sanitizeMarkdown()` is now actually called by `KnowledgeService`/`DocumentService`'s write paths, not just `renderMarkdown()`'s read-time layer; `GET /api/health` was added (public, database-connectivity check); the `postcss`/`sharp` CVEs were verified unreachable (no `next/image` or PostCSS-of-untrusted-input usage anywhere in the app) and accepted as debt rather than forcing a breaking `next` upgrade (Document 15, DEBT-009); and `ci.yml` gained a `postgres:16` service container plus a new integration test (`tests/integration/SearchRepository.integration.test.ts`, run via `npm run test:integration`) exercising the exact raw-SQL call shape that caused the Phase 6 parameter-type-inference bug, so a regression of that class now fails CI instead of only being catchable by manual verification. Document 13 §28 (Amendment 26) records the pass. <!-- Amended -->
 
 ---
 

@@ -7,6 +7,7 @@ import { successResponse, errorResponse } from "@/lib/utils/http";
 import { parseOrThrow } from "@/lib/validation";
 import { parseRequestBody } from "@/lib/utils/parse-request-body";
 import { logger } from "@/lib/logger";
+import { aiChatRateLimiter } from "@/lib/rate-limit/RateLimiter";
 
 // Document 8 §14 — "The route handler delegates to the AI Orchestrator."
 // This is the only Route Handler permitted to touch `ai/` at all (Document
@@ -19,6 +20,11 @@ const aiChatService = new AIChatService();
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireUserId();
+    // Phase 7 Security Report finding S4 (Document 13 §28, Amendment 26) —
+    // checked before parsing the body: a rate-limited caller shouldn't pay
+    // even the cost of body parsing, and this is the only route in the MVP
+    // with a real per-call external cost to bound.
+    aiChatRateLimiter.check(userId);
     const body = await parseRequestBody(request);
     const input = parseOrThrow(aiChatRequestSchema, body);
 

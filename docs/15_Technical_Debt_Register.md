@@ -42,13 +42,15 @@ Sorted by planned phase (Document 9).
 
 ## DEBT-002 — `sanitizeMarkdown()`'s strip-all-tags approach may be too aggressive
 
+**Status: partially closed (Phase 7.5, Document 13 §28 Amendment 26).** `sanitizeMarkdown()` is now actually wired into `KnowledgeService.create`/`.update` and `DocumentService.create`/`.update` (Phase 7 Security Report finding S3 — it existed but was dead code until now). The aggressiveness limitation described below is unchanged and still open.
+
 | Field | Value |
 |---|---|
 | **Description** | `lib/markdown/sanitize.ts`'s `sanitizeMarkdown()` strips every HTML-tag-shaped construct from markdown source text, which can mis-fire on legitimate prose containing bare `<`/`>` characters (e.g. `<https://example.com>` autolinks, or literal "x < y" text). Documented as a known limitation directly in the function's own comment when it was written. |
-| **Why deferred** | No real Knowledge/Document content exists yet to test against (Phase 2 built the schema and repositories; nothing has authored real markdown through the app). Tuning against hypothetical content would be guessing. |
-| **Risk** | Medium — could silently mangle legitimate user content once real authoring exists, which is a worse failure mode than being caught by a test, because it looks like data corruption rather than a rejected request. |
-| **Impact if unaddressed** | User-visible content corruption in Notes/Knowledge/Documents once Phase 3-4 land. |
-| **Planned phase** | Phase 3 (Backend Services — wherever markdown content first gets persisted through a Service, since sanitization belongs at that boundary per Document 7 §11). |
+| **Why deferred** | No real Knowledge/Document content exists yet to test against real authored content at scale. Tuning against hypothetical content would be guessing. |
+| **Risk** | Medium — could silently mangle legitimate user content, which is a worse failure mode than being caught by a test, because it looks like data corruption rather than a rejected request. Now live in the write path (previously dormant), so this risk is active, not theoretical. |
+| **Impact if unaddressed** | User-visible content corruption in Knowledge/Document markdown for prose containing bare `<`/`>`. |
+| **Planned phase** | Revisit once real authored content exists to test against (no fixed phase — data-driven, not calendar-driven). |
 | **Owner** | Project owner. |
 | **Exit criteria** | Test suite (`tests/unit/markdown.test.ts`) extended with real-world-shaped content samples (autolinks, code containing `<`/`>`, nested quotes); either the current approach passes or is replaced with a more surgical HTML-node-level strip (e.g. operating on the parsed mdast tree instead of the raw string). |
 
@@ -84,15 +86,17 @@ Sorted by planned phase (Document 9).
 
 ## DEBT-005 — No rate limiting on any endpoint
 
+**Status: partially closed (Phase 7.5, Document 13 §28 Amendment 26).** `POST /api/v1/ai/chat` — the highest-cost, highest-abuse-risk endpoint (real per-call OpenAI spend) — is now rate-limited (`lib/rate-limit/RateLimiter.ts`, 20 requests/60s per user). The Auth.js sign-in (magic-link) route remains unlimited; reduced-scope debt below.
+
 | Field | Value |
 |---|---|
-| **Description** | Document 8 §20 names rate limiting as "Future implementation" for AI, search, and authentication endpoints, but assigns it no concrete phase, owner, or exit criteria — it's a documented intention with no plan. Nothing in the current codebase (middleware, the not-yet-built API routes) implements it. |
-| **Why deferred** | No endpoint exists yet that rate limiting would protect (Phase 3+). Building it before there's a route to attach it to would be speculative. |
-| **Risk** | Medium-high once real endpoints exist — the AI Orchestrator (Phase 5) and the sign-in magic-link flow (already live) are both classic abuse targets (cost amplification via repeated OpenAI calls; email-bombing a KAIRO_OWNER_EMAIL-gated sign-in flow, though limited by the single-user allowlist). |
-| **Impact if unaddressed** | Potential API cost abuse (AI endpoints) or nuisance/DoS-adjacent abuse (auth endpoint) once those routes are live. |
-| **Planned phase** | Phase 8 (Deployment) — pinned here explicitly since Document 8 left it unscheduled; this register is the first place it has a concrete home. |
+| **Description** | Document 8 §20 names rate limiting as "Future implementation" for AI, search, and authentication endpoints. The AI endpoint is now covered (Phase 7.5); the Auth.js magic-link sign-in route is not. |
+| **Why deferred** | Phase 7.5's authorized scope was specifically "AI endpoint rate limiting" (the Phase 7 audit's highest-cost finding) — extending it to the sign-in route wasn't part of that authorization, and this project's pattern is to not expand a phase's scope past what was explicitly authorized (see Document 13 §27, Amendment 25, for the precedent of holding a scope boundary even when a broader fix would be easy to justify). |
+| **Risk** | Low-medium — the sign-in flow is already constrained by the single-user `KAIRO_OWNER_EMAIL` allowlist (`lib/auth/index.ts`'s `signIn` callback rejects every other address before Resend is ever called), which meaningfully narrows the abuse surface versus an open sign-up flow. |
+| **Impact if unaddressed** | Nuisance/DoS-adjacent abuse of the sign-in route (repeated magic-link requests) or of `SearchService`'s full-text search endpoint — neither has a real per-call monetary cost like the AI endpoint did. |
+| **Planned phase** | Phase 8 (Deployment), if still desired — pinned here since Document 8 left it unscheduled. |
 | **Owner** | Project owner. |
-| **Exit criteria** | A rate-limiting mechanism (e.g. Vercel's built-in rate limiting, Upstash Redis, or an in-memory limiter appropriate to the single-user MVP scale) applied to `/api/v1/ai/**` and the Auth.js sign-in route before production deployment. |
+| **Exit criteria** | The same `RateLimiterLike` abstraction (`lib/rate-limit/RateLimiter.ts`) applied to the Auth.js sign-in route and/or `/api/v1/search`, with per-route limits appropriate to each. |
 
 ---
 
@@ -135,6 +139,20 @@ Sorted by planned phase (Document 9).
 | **Planned phase** | Phase 8 (Deployment) — this is exactly the "confirm Postgres hosting/pooling strategy" question the original Ingestion Report raised and left as the one open item after the constitution was otherwise finalized. |
 | **Owner** | Project owner. |
 | **Exit criteria** | A concrete decision on hosting (Vercel Postgres / Neon / Supabase, per the original ingestion report's Q12) drives an explicit pool size configuration and, if the chosen host benefits from it, a switch to a serverless-aware driver (e.g. Neon's serverless driver) or a pooling proxy (PgBouncer / Prisma Accelerate) instead of a bare `pg.Pool`. |
+
+---
+
+## DEBT-009 — `npm audit` reports 3 high-severity transitive vulnerabilities (postcss, sharp)
+
+| Field | Value |
+|---|---|
+| **Description** | `npm audit` reports 3 HIGH-severity advisories, both transitive via `next`: `postcss` (`<=8.5.22` — XSS via unescaped `</style>` in CSS stringification; arbitrary/path-traversal file read via attacker-controlled `sourceMappingURL` in CSS comments) and `sharp` (`<0.35.0` — inherited libvips CVEs). The only fix path is `npm audit fix --force`, which upgrades `next` to `16.3.0` — a breaking major-version change. |
+| **Risk-acceptance decision (Phase 7.5, Document 13 §28 Amendment 26)** | **Accepted, not fixed, as of this phase.** Verified both vulnerable code paths are unreachable in this app: `postcss` processes only this project's own trusted CSS at build time (Tailwind's build pipeline) — the app never runs PostCSS against user-supplied or runtime-sourced CSS/comments, so the `sourceMappingURL`/`</style>` injection vectors have no attacker-controlled input to reach them. `sharp` is a transitive dependency of Next.js's built-in image-optimization API, exercised only through the `next/image` component or the `/_next/image` route — confirmed via `grep -rn "next/image\|<Image"` across the entire app that neither is used anywhere; there is no image-upload feature in the MVP (Notes/Knowledge/Documents are markdown/text only). `sharp`'s vulnerable code path is present in `node_modules` but never invoked by any route this app serves. |
+| **Why deferred rather than fixed immediately** | The fix requires a `next` major-version upgrade, which is a breaking change needing its own scoped, tested change — not a drop-in patch — and both CVEs are confirmed unreachable today, so there is no active risk to justify rushing it. |
+| **Impact if left unaddressed indefinitely** | None while `next/image` and PostCSS-of-untrusted-input stay unused. Becomes real risk the moment either is introduced (e.g. a future image-upload feature, or ingesting user-supplied CSS/theming) — re-evaluate at that point, not before. |
+| **Planned phase** | Phase 8 (Deployment) or whenever a `next` major-version upgrade is otherwise on the roadmap — bundle this with that work rather than a standalone forced upgrade. |
+| **Owner** | Project owner. |
+| **Exit criteria** | Either (a) `next` is upgraded to a version without these transitive vulnerabilities as part of an already-planned major-version bump, verified with a full re-run of `npm audit` plus the existing test/build suite, or (b) `next/image`/PostCSS-of-untrusted-input is introduced, at which point this becomes a blocking finding instead of accepted debt. |
 
 ---
 

@@ -16,10 +16,14 @@ jobs:
     name: TypeScript, ESLint, Prettier, Prisma, Tests, Build
     runs-on: ubuntu-latest
     # Document 11 §9 — these are CI-only dummy values, never real secrets.
-    # No live database is required: `prisma validate`/`generate` only need
-    # a syntactically present DATABASE_URL, and `next build` never queries
-    # the database (verified locally with PostgreSQL stopped entirely —
-    # no page performs a Prisma query yet).
+    # No live database is required for these particular steps:
+    # `prisma validate`/`generate` only need a syntactically present
+    # DATABASE_URL, and `next build` never queries the database (verified
+    # locally with PostgreSQL stopped entirely — no page performs a Prisma
+    # query at build time). The integration-test steps at the end of this
+    # job override DATABASE_URL to point at the `postgres` service
+    # container below instead (Document 13 §28, Amendment 26, Phase 7.5 —
+    # Phase 7 QA Report finding Q1).
     env:
       DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
       AUTH_SECRET: "ci-only-dummy-secret-not-a-real-credential"
@@ -27,6 +31,24 @@ jobs:
       RESEND_API_KEY: "ci-only-dummy-key"
       KAIRO_OWNER_EMAIL: "ci@example.com"
       OPENAI_API_KEY: "ci-only-dummy-key"
+
+    services:
+      # Document 13 §28 (Amendment 26, Phase 7.5) — only the final two
+      # steps (migrate + integration test) actually connect to this; every
+      # earlier step keeps using the dummy DATABASE_URL above, unchanged.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kairo
+          POSTGRES_PASSWORD: kairo
+          POSTGRES_DB: kairo_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout
@@ -64,3 +86,19 @@ jobs:
 
       - name: Next.js production build
         run: npm run build
+
+      # Document 13 §28 (Amendment 26, Phase 7.5) — Phase 7 QA Report
+      # finding Q1: everything above validates schema *shape* but never
+      # actually runs against Postgres, so a raw-SQL regression (like the
+      # Phase 6 parameter-type-inference bug, Document 13 §27) would pass
+      # every step above and only fail at runtime. These two steps are the
+      # first thing in this pipeline that talks to a real database.
+      - name: Apply migrations to live database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: "postgresql://kairo:kairo@localhost:5432/kairo_ci"
+
+      - name: Integration tests (live database)
+        run: npm run test:integration
+        env:
+          DATABASE_URL: "postgresql://kairo:kairo@localhost:5432/kairo_ci"

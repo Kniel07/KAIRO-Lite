@@ -21,6 +21,7 @@ import { NotFoundError, UnknownError } from "@/lib/utils/errors";
 import type { FindManyParams, PagedResult } from "@/features/shared/types/Repository";
 import type { ServiceContext } from "@/features/shared/types/Service";
 import { assertProjectOwnership } from "@/features/shared/services/assertProjectOwnership";
+import { sanitizeMarkdown } from "@/lib/markdown";
 
 // Document 7 §7-8, Document 8 §12, Document 13 §20 (Phase 3) —
 // DocumentService owns Document business logic: project-scoped
@@ -72,7 +73,12 @@ export class DocumentService {
 
       const document = await documentRepository.create({
         title: input.title,
-        markdown: input.markdown,
+        // Document 7 §21 / Document 13 §28 (Amendment 26, Phase 7.5) —
+        // write-time sanitization (Phase 7 Security Report finding S3);
+        // see `KnowledgeService.create`'s identical comment for why this is
+        // one of two independent layers, not a replacement for
+        // `renderMarkdown()`'s read-time one.
+        markdown: sanitizeMarkdown(input.markdown),
         type: input.type,
         project: { connect: { id: input.projectId } },
       });
@@ -92,7 +98,15 @@ export class DocumentService {
   async update(context: ServiceContext, id: string, rawInput: unknown): Promise<KairoDocument> {
     const input = parseOrThrow(updateDocumentSchema, rawInput);
     const existing = await this.get(context, id);
-    const contentChanged = input.markdown !== undefined && input.markdown !== existing.markdown;
+    // Sanitize once, up front, so the version-bump comparison below checks
+    // the same value that actually gets persisted (Document 13 §28,
+    // Amendment 26) — comparing the raw input against `existing.markdown`
+    // (already-sanitized, from a prior write) could otherwise bump the
+    // version on a change that sanitization reduces to a no-op.
+    const sanitizedMarkdown =
+      input.markdown !== undefined ? sanitizeMarkdown(input.markdown) : undefined;
+    const contentChanged =
+      sanitizedMarkdown !== undefined && sanitizedMarkdown !== existing.markdown;
 
     return withTransaction(async (tx) => {
       const documentRepository = new DocumentRepository(tx);
@@ -100,7 +114,7 @@ export class DocumentService {
 
       const document = await documentRepository.update(id, {
         ...(input.title !== undefined ? { title: input.title } : {}),
-        ...(input.markdown !== undefined ? { markdown: input.markdown } : {}),
+        ...(sanitizedMarkdown !== undefined ? { markdown: sanitizedMarkdown } : {}),
         ...(input.type !== undefined ? { type: input.type } : {}),
         // Document 8 §12 "Version history" — bump on actual content change,
         // not on every update (a title-only rename isn't a new version).

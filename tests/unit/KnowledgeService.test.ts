@@ -258,6 +258,58 @@ describe("KnowledgeService", () => {
       ).rejects.toThrow(ForbiddenError);
       expect(mockDb.knowledge.create).not.toHaveBeenCalled();
     });
+
+    // Document 13 §28 (Amendment 26, Phase 7.5) — Phase 7 Security Report
+    // finding S3: `sanitizeMarkdown()` existed but was never actually
+    // called by this Service. This proves it now runs before persistence.
+    it("strips raw HTML from markdown before persisting", async () => {
+      const repos = makeFakeRepositories();
+      mockDb.knowledge.create.mockResolvedValue(makeKnowledge());
+      mockDb.auditLog.create.mockResolvedValue({});
+      const service = new KnowledgeService(
+        repos.knowledgeRepository,
+        repos.projectRepository,
+        repos.governanceRuleRepository,
+        repos.auditLogRepository,
+      );
+
+      await service.create(context, {
+        title: "Title",
+        markdown: "Safe text <script>alert(1)</script> more text",
+        category: "engineering",
+      });
+
+      const persisted = mockDb.knowledge.create.mock.calls[0]![0].data.markdown as string;
+      expect(persisted).not.toContain("<script");
+      expect(persisted).not.toContain("alert(1)");
+      expect(persisted).toContain("Safe text");
+      expect(persisted).toContain("more text");
+    });
+  });
+
+  describe("update", () => {
+    // Document 13 §28 (Amendment 26, Phase 7.5) — same finding as the
+    // `create` test above, exercised on the update path.
+    it("strips raw HTML from markdown before persisting", async () => {
+      const repos = makeFakeRepositories();
+      vi.mocked(repos.knowledgeRepository.findById).mockResolvedValue(makeKnowledge());
+      mockDb.knowledge.update.mockResolvedValue(makeKnowledge());
+      mockDb.auditLog.create.mockResolvedValue({});
+      const service = new KnowledgeService(
+        repos.knowledgeRepository,
+        repos.projectRepository,
+        repos.governanceRuleRepository,
+        repos.auditLogRepository,
+      );
+
+      await service.update(context, "knowledge-1", {
+        markdown: "Safe text <script>alert(1)</script> more text",
+      });
+
+      const persisted = mockDb.knowledge.update.mock.calls[0]![0].data.markdown as string;
+      expect(persisted).not.toContain("<script");
+      expect(persisted).not.toContain("alert(1)");
+    });
   });
 
   describe("archive", () => {

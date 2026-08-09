@@ -176,6 +176,26 @@ describe("DocumentService", () => {
         data: expect.objectContaining({ entity: "Document", operation: "CREATE" }),
       });
     });
+
+    // Document 13 §28 (Amendment 26, Phase 7.5) — Phase 7 Security Report
+    // finding S3: `sanitizeMarkdown()` existed but was never actually
+    // called by this Service. This proves it now runs before persistence.
+    it("strips raw HTML from markdown before persisting", async () => {
+      const repos = makeFakeRepositories();
+      mockDb.document.create.mockResolvedValue(makeDocument());
+      mockDb.auditLog.create.mockResolvedValue({});
+      const service = makeService(repos);
+
+      await service.create(context, {
+        title: "Title",
+        projectId: "11111111-1111-4111-8111-111111111111",
+        markdown: "Safe text <script>alert(1)</script> more text",
+      });
+
+      const persisted = mockDb.document.create.mock.calls[0]![0].data.markdown as string;
+      expect(persisted).not.toContain("<script");
+      expect(persisted).not.toContain("alert(1)");
+    });
   });
 
   describe("update", () => {
@@ -209,6 +229,30 @@ describe("DocumentService", () => {
         where: { id: "document-1" },
         data: { title: "Renamed" },
       });
+    });
+
+    // Document 13 §28 (Amendment 26, Phase 7.5) — same finding as the
+    // `create` test above, exercised on the update path. Also proves the
+    // version-bump comparison uses the sanitized value (Document 13 §28's
+    // comment in `DocumentService.update` explains why that matters).
+    it("strips raw HTML from markdown before persisting and before the version-bump comparison", async () => {
+      const repos = makeFakeRepositories();
+      const existing = makeDocument({ markdown: "old", version: 1 });
+      vi.mocked(repos.documentRepository.findById).mockResolvedValue(existing);
+      mockDb.document.update.mockResolvedValue(makeDocument({ version: 2 }));
+      mockDb.auditLog.create.mockResolvedValue({});
+      const service = makeService(repos);
+
+      await service.update(context, "document-1", {
+        markdown: "Safe text <script>alert(1)</script> more text",
+      });
+
+      const persisted = mockDb.document.update.mock.calls[0]![0].data.markdown as string;
+      expect(persisted).not.toContain("<script");
+      expect(persisted).not.toContain("alert(1)");
+      expect(mockDb.document.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ version: 2 }) }),
+      );
     });
   });
 
