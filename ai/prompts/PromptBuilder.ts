@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Knowledge } from "@/generated/prisma/client";
 import type { AIProviderMessage } from "@/types/ai";
 import type { PromptTemplate } from "@/ai/prompts/templates";
 import type { AssembledContext } from "@/ai/context/ContextRetriever";
@@ -48,10 +49,7 @@ function serializeProject(context: AssembledContext): string | null {
   return `Active Project: ${name} (status: ${status}, priority: ${priority})${description ? `\n${description}` : ""}`;
 }
 
-function serializeKnowledgeList(
-  label: string,
-  entries: AssembledContext["relatedKnowledge"],
-): string | null {
+function serializeKnowledgeList(label: string, entries: Knowledge[]): string | null {
   if (!entries.length) return null;
   const lines = entries.map(
     (entry) =>

@@ -61,7 +61,7 @@ describe("buildPromptMessages", () => {
   it("includes only the sections that have data", () => {
     const context: AssembledContext = {
       ...emptyContext,
-      relatedKnowledge: [makeKnowledge()],
+      relatedKnowledge: [{ ...makeKnowledge(), rank: 0.5 }],
     };
 
     const messages = buildPromptMessages(PROMPT_TEMPLATES.THINK, context, "hi");

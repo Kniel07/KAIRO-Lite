@@ -13,7 +13,10 @@ const context = { userId: "user-1" };
 describe("SearchService", () => {
   describe("searchKnowledge", () => {
     it("throws ValidationError on an empty query without calling the repository", async () => {
-      const searchRepository: SearchRepositoryLike = { searchKnowledge: vi.fn() };
+      const searchRepository: SearchRepositoryLike = {
+        searchKnowledge: vi.fn(),
+        searchKnowledgeForContext: vi.fn(),
+      };
       const service = new SearchService(searchRepository);
 
       await expect(service.searchKnowledge(context, { query: "" })).rejects.toThrow(
@@ -25,6 +28,7 @@ describe("SearchService", () => {
     it("passes the validated query and pagination through to the repository", async () => {
       const searchRepository: SearchRepositoryLike = {
         searchKnowledge: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+        searchKnowledgeForContext: vi.fn(),
       };
       const service = new SearchService(searchRepository);
 
@@ -44,6 +48,7 @@ describe("SearchService", () => {
       };
       const searchRepository: SearchRepositoryLike = {
         searchKnowledge: vi.fn().mockResolvedValue(result),
+        searchKnowledgeForContext: vi.fn(),
       };
       const service = new SearchService(searchRepository);
 

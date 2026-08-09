@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Implementation Plan
 
-Version: 1.5 (amended)
+Version: 1.6 (amended)
 Status: Approved
 
 ---
@@ -274,15 +274,19 @@ Deliverables
 - Tags (Document 8 §9a)
 - Document linking
 
+All seven were already delivered in Phases 3–4 (`KnowledgeService`, the Knowledge page, `SearchService`/the Search page, Document 8 §9a's Tags API). <!-- Amended -->
+
 Future
 
 - Semantic search
 - Embeddings
 - Knowledge graph
 
+These remain explicitly out of MVP scope — Document 9 Phase 9 lists "Embeddings" and "Vector Search" by name as "intentionally excluded from MVP," and Documents 1 §9, 3 §11, 4 §14, and 8 §13 all independently treat them as post-MVP. When Phase 6 was authorized, the initial framing ("Knowledge Intelligence" = embeddings infrastructure, vector storage, hybrid retrieval) conflicted with this directly; the project owner corrected the authorization to stay inside the existing MVP boundary rather than amend five documents to match an initial recommendation. The corrected Phase 6 scope — Document 13 §28 (Amendment 25) — improved retrieval quality within PostgreSQL full-text search instead: `SearchRepository` gained `searchKnowledgeForContext`, implementing two of Document 4 §11's non-semantic ranking signals that were never wired up (Active-Project affinity, Recency decay) and eliminating an N+1 query pattern (`RepositoryContextRetriever`'s "Related Knowledge" step previously ran a search then one `findById` per result); `AIOrchestratorResponse.citations` became structured (`{id, title, reason, rank?}`) instead of bare ids, so a response can show *why* each citation was included; Related and Global Knowledge are now deduped against each other before reaching the prompt. `SearchService`/the Search page's existing `searchKnowledge` method was not touched. <!-- Amended -->
+
 Exit Criteria
 
-✓ Knowledge retrieval operational
+✓ Knowledge retrieval operational — already true from Phase 3–4 for CRUD/full-text search. The Phase 6 correction pass additionally verified, live against a real Postgres database (not just unit tests): a project-affinity boost correctly surfaces a same-project Knowledge entry above otherwise-equal-relevance results from other projects, and a recency boost correctly surfaces a freshly-updated entry above older equal-relevance entries. This surfaced one real bug — Postgres rejected the boost constants with `invalid input syntax for type integer`, because a bare `0`/`0.0` sharing a `GREATEST`/`CASE` expression with an interpolated float parameter let the driver infer the wrong parameter type — fixed with explicit `::float8` casts. 140 unit tests (3 more) cover the new ranking/dedup/citation behavior via fakes; a live HTTP request through the full chain (auth → context retrieval, exercising the corrected SQL for real → prompt assembly) confirmed no error before the expected network-egress failure at the provider call. <!-- Amended -->
 
 ---
 

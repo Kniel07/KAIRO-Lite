@@ -25,9 +25,25 @@ export interface AIOrchestratorRequest {
   approved?: boolean;
 }
 
+/**
+ * Document 13 §27 (Amendment 25, Phase 6 corrected scope) — "explainable
+ * where practical": a citation now says *why* it was included, not just
+ * its id. `explicit_reference` is a caller-supplied `knowledgeIds` entry
+ * (Document 12 §4's "Active Document," included regardless of ranking);
+ * `related_knowledge` is a search match, and carries the `rank` score
+ * that ordered it — the same score `SearchRepository.searchKnowledgeForContext`
+ * computed (full-text relevance + Active-Project/Recency boosts, Doc 4 §11).
+ */
+export interface Citation {
+  id: string;
+  title: string;
+  reason: "explicit_reference" | "related_knowledge";
+  rank?: number;
+}
+
 export interface AIOrchestratorResponse {
   content: ModeOutput;
-  citations: string[];
+  citations: Citation[];
   usage?: {
     promptTokens: number;
     completionTokens: number;
@@ -78,14 +94,36 @@ export class AIOrchestrator {
     });
     const content = this.parseAndValidate(response.content, template, request);
 
-    // Document 12 §2/§4 — knowledge actually placed in context is what the
-    // response is grounded in; citing it is how "AI explains reasoning"
-    // (Doc 4 §1) stays checkable against real rows, not the model's say-so.
-    const citations = [...context.activeKnowledge, ...context.relatedKnowledge].map(
-      (entry) => entry.id,
-    );
+    const citations = this.buildCitations(context);
 
     return { content, citations, usage: response.usage };
+  }
+
+  /**
+   * Document 12 §2/§4 — knowledge actually placed in context is what the
+   * response is grounded in; citing it is how "AI explains reasoning"
+   * (Doc 4 §1) stays checkable against real rows, not the model's say-so.
+   * Explicit references lead (the caller asked for them by id, so they're
+   * unconditionally relevant); ranked matches follow, most relevant first
+   * (Document 13 §27, Amendment 25 — "citation quality").
+   */
+  private buildCitations(context: AssembledContext): Citation[] {
+    const explicit: Citation[] = context.activeKnowledge.map((entry) => ({
+      id: entry.id,
+      title: entry.title,
+      reason: "explicit_reference",
+    }));
+
+    const related: Citation[] = [...context.relatedKnowledge]
+      .sort((a, b) => b.rank - a.rank)
+      .map((entry) => ({
+        id: entry.id,
+        title: entry.title,
+        reason: "related_knowledge",
+        rank: entry.rank,
+      }));
+
+    return [...explicit, ...related];
   }
 
   /**

@@ -1,7 +1,7 @@
 # KAIRO-Lite
 ## Architecture Amendments
 
-Version: 1.9 (applied)
+Version: 2.0 (applied)
 Status: Applied — approved by the project owner. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, and 11 have been updated in place to reflect every amendment below.
 
 ---
@@ -383,7 +383,24 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 
 ---
 
-# 27. Amendment Ledger Summary
+# 27. Amendment 25 — Phase 6 Corrected Scope (Knowledge Intelligence Within MVP)
+
+**Problem:** Phase 6 was initially authorized as "Knowledge Intelligence" scoped to embeddings infrastructure, vector storage, and hybrid retrieval. This directly conflicted with the constitution as it stood: Document 1 §9 (Amendment 1) defers semantic search; Document 3 §11 lists Embeddings/Vector Index under Future Tables; Document 4 §14 lists Semantic search/Embeddings as "Reserved for future releases"; Document 8 §13 states MVP search is full-text only, "Future: Semantic Search, Vector Search"; and Document 9's own Phase 6 section already exists, already lists Knowledge CRUD/full-text search/tags/linking as its deliverables (all completed in Phases 3–4), and lists "Semantic search / Embeddings / Knowledge graph" under its own **Future** subsection. Document 9 Phase 9 is the most explicit: it names "Embeddings" and "Vector Search" and states "These features are intentionally excluded from MVP." Before any code was written, this conflict was surfaced to the project owner rather than either silently building the excluded capability or silently refusing.
+
+**Chosen Solution:** The project owner corrected Phase 6's scope to stay inside the existing MVP boundary — explicitly declining to amend Documents 1/3/4/8/9 to accommodate the original recommendation, on the principle that "a constitutional amendment should happen because you've decided the product needs it — not because a review suggested a common architecture pattern." The corrected scope: improve retrieval quality, ranking, context selection, explainability, and citation quality within PostgreSQL full-text search — no embeddings, no vector storage, no new external retrieval dependency. Concretely:
+- **`SearchRepository.searchKnowledgeForContext`** (new method; the existing `searchKnowledge` used by `SearchService`/the Search page is untouched) — combines `ts_rank` with two of Document 4 §11's Knowledge Retrieval Strategy signals that were specified but never implemented: Active-Project affinity (a flat boost for same-project matches) and Recency (a linear decay to zero over 90 days). "Tags" and "Semantic similarity" remain unimplemented — Tags has no query surface yet, and semantic similarity is the exact capability this amendment declined to build.
+- **N+1 elimination:** the same method selects full `Knowledge` rows directly instead of `RepositoryContextRetriever` running a search and then issuing one `findById` per result — a real "retrieval performance" cost on every AI request, closed as part of this pass rather than left for later.
+- **Deduplication:** `RepositoryContextRetriever.retrieve()` now filters Related Knowledge against Global Knowledge after both resolve (they're fetched in parallel, so a project-less entry matching the search query could previously reach the prompt twice — Document 4 §6 "avoid prompt bloat").
+- **Explainable, higher-quality citations:** `AIOrchestratorResponse.citations` changed from bare id strings to `{id, title, reason, rank?}` — `reason` distinguishes an explicit `knowledgeIds` reference from a ranked search match, and related-knowledge citations are sorted by rank descending. `AIChatService`'s `citedKnowledge` connect logic was updated for the new shape.
+- **A real bug found via live database verification, not caught by any static check:** the ranking SQL's boost constants (`0.3`, `0.1`) triggered `invalid input syntax for type integer` in Postgres, because a bare `0`/`0.0` sharing a `GREATEST`/`CASE` expression with an interpolated float parameter let the driver infer the wrong bound type. Fixed with explicit `::float8` casts; re-verified live afterward (project-affinity and recency boosts both confirmed to reorder results correctly against real seeded data).
+
+**Consistency Rationale:** Nothing here required a new layer, table, external dependency, or capability outside what Document 4 §11 already specified. The two ranking signals implemented are named, non-semantic entries from that section's own priority list; everything else is a performance or data-quality fix inside the existing `SearchRepository`/`RepositoryContextRetriever`/`AIOrchestrator` boundaries. `SearchService` remains the only entry point the Search page uses; `AIOrchestrator` remains the only AI entry point; no Component, Route Handler, or Service outside `ai/`'s own dependency rules changed.
+
+**Applied text change:** Document 9, Phase 6 — annotated to note its deliverables were already complete from Phases 3–4, to record the scope-correction episode, and to describe the corrected work and its verification. No change to Documents 1, 3, 4, 8, or 9 Phase 9's MVP exclusions — that boundary was upheld, not moved.
+
+---
+
+# 28. Amendment Ledger Summary
 
 | # | Topic | Affected Document(s) | Status |
 |---|---|---|---|
@@ -412,8 +429,9 @@ Deliberately **read/archive-only** — no `POST /api/v1/conversations/:id/messag
 | 22 | `ai/` ESLint boundary correction (enforcement only, no text change) | eslint.config.js | Applied |
 | 23 | Phase 5 AI Layer architecture (Orchestrator factory, `.strict()` response validation, `findGlobal`, `AIChatService` persistence, embeddings exclusion, Document 12 status correction) | Doc 9 Phase 5, Doc 12 | Applied |
 | 24 | Phase 5.5 AI Stabilization (Settings applied to provider calls, Knowledge ownership check, persistence-failure response preservation, Stage 1→2 approval enforcement, rate-limit normalization) | None (behavioral only, no text change) | Applied |
+| 25 | Phase 6 corrected scope (Knowledge Intelligence within MVP — ranking, N+1 fix, dedup, explainable citations; embeddings/vector storage declined) | Doc 9 Phase 6 | Applied |
 
-All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, and 12 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint; Amendment 18 originated from the Phase 3 implementation itself; Amendment 19 originated from the Document 14 Revision 3 pre-Phase-4 audit; Amendment 20 originated from the Phase 4 implementation itself; Amendment 21 originated from the read-only Pre-Phase-5 UX Review, which found Phase 4's "Full navigation operational" exit criterion was not actually met and reopened Phase 4 for correction before Phase 5 was authorized; Amendments 22–23 originated from the Phase 5 implementation itself; Amendment 24 originated from the read-only Pre-Phase-6 AI Architecture Review, which authorized a scoped Phase 5.5 stabilization pass before Knowledge Intelligence work begins. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
+All items are now Applied. Documents 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, and 12 have been edited in place (version bumped each time, with inline `<!-- Amended -->` markers or equivalent inline notes), and Document 9's Final Approval Gate (§9) references Documents 1–13. Amendments 11–17 originated from the Phase 2 architectural review and the subsequent Infrastructure Hardening Sprint; Amendment 18 originated from the Phase 3 implementation itself; Amendment 19 originated from the Document 14 Revision 3 pre-Phase-4 audit; Amendment 20 originated from the Phase 4 implementation itself; Amendment 21 originated from the read-only Pre-Phase-5 UX Review, which found Phase 4's "Full navigation operational" exit criterion was not actually met and reopened Phase 4 for correction before Phase 5 was authorized; Amendments 22–23 originated from the Phase 5 implementation itself; Amendment 24 originated from the read-only Pre-Phase-6 AI Architecture Review, which authorized a scoped Phase 5.5 stabilization pass before Knowledge Intelligence work begins; Amendment 25 originated from a scope conflict caught before Phase 6 implementation began — the initial "Knowledge Intelligence" authorization named embeddings/vector storage, which Document 9 Phase 9 explicitly excludes from MVP, and the project owner corrected the authorization rather than amend the exclusion. All recorded here anyway, in the same ledger, since this document's purpose is being the single place every constitutional change is traceable from, regardless of which phase surfaced it. The full constitution (Documents 1–14) is internally consistent as of this revision.
 
 ---
 

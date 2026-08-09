@@ -21,6 +21,7 @@ import {
 } from "@/features/settings/repositories/SettingsRepository";
 import {
   SearchRepository,
+  type RankedKnowledge,
   type SearchRepositoryLike,
 } from "@/lib/db/repositories/SearchRepository";
 import { ForbiddenError, NotFoundError } from "@/lib/utils/errors";
@@ -38,9 +39,10 @@ export interface AssembledContext {
    * `knowledgeIds`, included regardless of recency ranking (Doc 12 §4). */
   activeKnowledge: Knowledge[];
   /** Priority 3 — Related Knowledge, ranked via full-text search on the
-   * prompt (Doc 4 §11, Doc 12 §2 — "full-text ranked per Document 10 §8's
-   * search index"). */
-  relatedKnowledge: Knowledge[];
+   * prompt plus Doc 4 §11's Active-Project and Recency signals (Document
+   * 13 §27, Amendment 25) — full-text ranked per Document 10 §8's search
+   * index (Doc 12 §2). */
+  relatedKnowledge: RankedKnowledge[];
   /** Priority 4 — Previous Conversation (last N messages, ascending). */
   conversationHistory: Message[];
   /** Priority 5 — Global Knowledge (project-less entries). */
@@ -98,10 +100,18 @@ export class RepositoryContextRetriever implements ContextRetriever {
       this.loadUserPreferences(params),
     ]);
 
+    // Document 13 §27 (Amendment 25, Phase 6 corrected scope) — Related
+    // and Global Knowledge are retrieved independently (in parallel), so
+    // a project-less entry that also matches the search query could
+    // appear in both; dedupe here rather than send the same Knowledge
+    // entry to the model twice (Doc 4 §6 "avoid prompt bloat").
+    const globalIds = new Set(globalKnowledge.map((entry) => entry.id));
+    const dedupedRelatedKnowledge = relatedKnowledge.filter((entry) => !globalIds.has(entry.id));
+
     return {
       project,
       activeKnowledge,
-      relatedKnowledge,
+      relatedKnowledge: dedupedRelatedKnowledge,
       conversationHistory,
       globalKnowledge,
       userPreferences,
@@ -156,20 +166,24 @@ export class RepositoryContextRetriever implements ContextRetriever {
     }
   }
 
-  /** Doc 4 §11 / Doc 12 §2 — full-text ranked, avoiding prompt bloat by capping the result count. */
-  private async loadRelatedKnowledge(params: ContextRetrieverParams): Promise<Knowledge[]> {
+  /**
+   * Document 4 §11 / Document 13 §27 (Amendment 25) — full-text ranked,
+   * boosted by Active-Project and Recency (see
+   * `SearchRepository.searchKnowledgeForContext`'s header comment for the
+   * ranking formula), avoiding prompt bloat by capping the result count.
+   * Uses the context-specific search method (full `Knowledge` rows in one
+   * query) rather than `searchKnowledge` + a `findById` per result — the
+   * N+1 pattern the previous version had.
+   */
+  private async loadRelatedKnowledge(params: ContextRetrieverParams): Promise<RankedKnowledge[]> {
     if (!params.prompt.trim()) return [];
-    const { items } = await this.searchRepository.searchKnowledge({
+    const results = await this.searchRepository.searchKnowledgeForContext({
       query: params.prompt,
-      pageSize: RELATED_KNOWLEDGE_LIMIT,
+      projectId: params.projectId,
+      limit: RELATED_KNOWLEDGE_LIMIT,
     });
     const excludeIds = new Set(params.knowledgeIds ?? []);
-    const found = await Promise.all(
-      items
-        .filter((item) => !excludeIds.has(item.id))
-        .map((item) => this.knowledgeRepository.findById(item.id)),
-    );
-    return found.filter((entry): entry is Knowledge => entry !== null);
+    return results.filter((entry) => !excludeIds.has(entry.id));
   }
 
   /** Doc 11 §7 ownership pattern applies to the conversation too. */

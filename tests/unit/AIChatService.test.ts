@@ -311,7 +311,12 @@ describe("AIChatService", () => {
       await service.recordTurn(context, {
         mode: "THINK",
         prompt: "hi",
-        response: makeResponse({ citations: ["knowledge-1", "knowledge-2"] }),
+        response: makeResponse({
+          citations: [
+            { id: "knowledge-1", title: "K1", reason: "explicit_reference" },
+            { id: "knowledge-2", title: "K2", reason: "related_knowledge", rank: 0.5 },
+          ],
+        }),
       });
 
       expect(mockDb.message.create).toHaveBeenNthCalledWith(2, {

@@ -109,7 +109,11 @@ export class AIChatService {
             }
           : {}),
         ...(input.response.citations.length
-          ? { citedKnowledge: { connect: input.response.citations.map((id) => ({ id })) } }
+          ? {
+              citedKnowledge: {
+                connect: input.response.citations.map((citation) => ({ id: citation.id })),
+              },
+            }
           : {}),
       });
 

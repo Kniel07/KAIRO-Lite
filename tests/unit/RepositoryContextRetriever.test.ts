@@ -5,7 +5,7 @@ import type { KnowledgeRepositoryLike } from "@/features/knowledge/repositories/
 import type { ConversationRepositoryLike } from "@/features/ai/repositories/ConversationRepository";
 import type { MessageRepositoryLike } from "@/features/ai/repositories/MessageRepository";
 import type { SettingsRepositoryLike } from "@/features/settings/repositories/SettingsRepository";
-import type { SearchRepositoryLike } from "@/lib/db/repositories/SearchRepository";
+import type { RankedKnowledge, SearchRepositoryLike } from "@/lib/db/repositories/SearchRepository";
 import { ForbiddenError, NotFoundError } from "@/lib/utils/errors";
 import { RepositoryContextRetriever } from "@/ai/context/ContextRetriever";
 
@@ -47,6 +47,10 @@ function makeKnowledge(overrides: Partial<Knowledge> = {}): Knowledge {
     archivedAt: null,
     ...overrides,
   } as Knowledge;
+}
+
+function makeRanked(overrides: Partial<RankedKnowledge> = {}): RankedKnowledge {
+  return { ...makeKnowledge(), rank: 0.5, ...overrides };
 }
 
 function makeMessage(overrides: Partial<Message> = {}): Message {
@@ -118,6 +122,7 @@ function makeFakeRepositories() {
   };
   const searchRepository: SearchRepositoryLike = {
     searchKnowledge: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    searchKnowledgeForContext: vi.fn().mockResolvedValue([]),
   };
   return {
     projectRepository,
@@ -274,29 +279,28 @@ describe("RepositoryContextRetriever", () => {
     });
   });
 
-  describe("Related Knowledge (priority 3 — full-text ranked)", () => {
-    it("searches by the prompt and excludes ids already covered by activeKnowledge", async () => {
+  describe("Related Knowledge (priority 3 — full-text + Active-Project/Recency ranked)", () => {
+    it("searches by the prompt (and projectId, for the ranking boost) and excludes ids already covered by activeKnowledge", async () => {
       const repos = makeFakeRepositories();
+      vi.mocked(repos.projectRepository.findById).mockResolvedValue(makeProject());
       vi.mocked(repos.knowledgeRepository.findById).mockImplementation(async (id: string) =>
         makeKnowledge({ id }),
       );
-      vi.mocked(repos.searchRepository.searchKnowledge).mockResolvedValue({
-        items: [
-          { id: "k-1", title: "K1", summary: null, rank: 0.9 },
-          { id: "k-2", title: "K2", summary: null, rank: 0.5 },
-        ],
-        total: 2,
-      });
+      vi.mocked(repos.searchRepository.searchKnowledgeForContext).mockResolvedValue([
+        makeRanked({ id: "k-1", rank: 0.9 }),
+        makeRanked({ id: "k-2", rank: 0.5 }),
+      ]);
       const retriever = makeRetriever(repos);
 
       const context = await retriever.retrieve({
         userId: "user-1",
         prompt: "search term",
+        projectId: "project-1",
         knowledgeIds: ["k-1"],
       });
 
-      expect(repos.searchRepository.searchKnowledge).toHaveBeenCalledWith(
-        expect.objectContaining({ query: "search term" }),
+      expect(repos.searchRepository.searchKnowledgeForContext).toHaveBeenCalledWith(
+        expect.objectContaining({ query: "search term", projectId: "project-1" }),
       );
       expect(context.relatedKnowledge.map((k) => k.id)).toEqual(["k-2"]);
     });
@@ -307,7 +311,37 @@ describe("RepositoryContextRetriever", () => {
 
       await retriever.retrieve({ userId: "user-1", prompt: "   " });
 
-      expect(repos.searchRepository.searchKnowledge).not.toHaveBeenCalled();
+      expect(repos.searchRepository.searchKnowledgeForContext).not.toHaveBeenCalled();
+    });
+
+    it("carries the rank score through to the assembled context (Document 13 §28, Amendment 25)", async () => {
+      const repos = makeFakeRepositories();
+      vi.mocked(repos.searchRepository.searchKnowledgeForContext).mockResolvedValue([
+        makeRanked({ id: "k-1", rank: 0.73 }),
+      ]);
+      const retriever = makeRetriever(repos);
+
+      const context = await retriever.retrieve({ userId: "user-1", prompt: "search term" });
+
+      expect(context.relatedKnowledge[0]?.rank).toBe(0.73);
+    });
+
+    it("dedupes against Global Knowledge — a project-less entry matched by search isn't sent to the model twice", async () => {
+      const repos = makeFakeRepositories();
+      vi.mocked(repos.searchRepository.searchKnowledgeForContext).mockResolvedValue([
+        makeRanked({ id: "k-shared", rank: 0.8 }),
+        makeRanked({ id: "k-only-related", rank: 0.4 }),
+      ]);
+      vi.mocked(repos.knowledgeRepository.findGlobal).mockResolvedValue({
+        items: [makeKnowledge({ id: "k-shared" })],
+        total: 1,
+      });
+      const retriever = makeRetriever(repos);
+
+      const context = await retriever.retrieve({ userId: "user-1", prompt: "search term" });
+
+      expect(context.relatedKnowledge.map((k) => k.id)).toEqual(["k-only-related"]);
+      expect(context.globalKnowledge.map((k) => k.id)).toEqual(["k-shared"]);
     });
   });
 

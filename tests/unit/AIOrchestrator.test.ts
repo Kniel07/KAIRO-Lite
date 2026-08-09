@@ -294,7 +294,7 @@ describe("AIOrchestrator", () => {
   });
 
   describe("citations", () => {
-    it("cites the ids of active and related Knowledge actually placed in context", async () => {
+    it("cites active and related Knowledge actually placed in context, explaining why each was included", async () => {
       const knowledgeFields = {
         title: "K",
         category: "general",
@@ -306,7 +306,7 @@ describe("AIOrchestrator", () => {
           { id: "k-active", ...knowledgeFields },
         ] as AssembledContext["activeKnowledge"],
         relatedKnowledge: [
-          { id: "k-related", ...knowledgeFields },
+          { id: "k-related", ...knowledgeFields, rank: 0.42 },
         ] as AssembledContext["relatedKnowledge"],
       });
       const validOutput = {
@@ -318,7 +318,30 @@ describe("AIOrchestrator", () => {
 
       const result = await orchestrator.execute({ mode: "THINK", prompt: "hi", userId: "user-1" });
 
-      expect(result.citations).toEqual(["k-active", "k-related"]);
+      expect(result.citations).toEqual([
+        { id: "k-active", title: "K", reason: "explicit_reference" },
+        { id: "k-related", title: "K", reason: "related_knowledge", rank: 0.42 },
+      ]);
+    });
+
+    it("sorts related-knowledge citations by rank descending, with explicit references always first", async () => {
+      const knowledgeFields = { title: "K", category: "general", summary: "s", markdown: "m" };
+      const context = makeContext({
+        relatedKnowledge: [
+          { id: "k-low", ...knowledgeFields, rank: 0.2 },
+          { id: "k-high", ...knowledgeFields, rank: 0.9 },
+        ] as AssembledContext["relatedKnowledge"],
+      });
+      const validOutput = {
+        ideas: [{ title: "A", description: "d", assumptions: [], tradeoffs: [] }],
+        openQuestions: [],
+      };
+      const provider = makeProvider({ content: JSON.stringify(validOutput) });
+      const orchestrator = new AIOrchestrator(provider, makeContextRetriever(context));
+
+      const result = await orchestrator.execute({ mode: "THINK", prompt: "hi", userId: "user-1" });
+
+      expect(result.citations.map((c) => c.id)).toEqual(["k-high", "k-low"]);
     });
   });
 
